@@ -1,0 +1,37 @@
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Databases
+*.db
+tracker.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+app.log
+
+# Python Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# IDEs & Editor folders
+.vscode/
+.idea/
+.kiro/
+
+# Temporary Directories
+scratch/
+tmp/
+temp/
+
+# Large Model Files (optional, though yolov8n.pt is small, it's good practice)
+# *.pt
+
+# OS generated files
+.DS_Store
+Thumbs.db

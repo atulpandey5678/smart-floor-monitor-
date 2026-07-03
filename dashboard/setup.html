@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cologic — First-Time Setup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --accent: #6366F1;
+            --accent-hover: #818CF8;
+            --success: #10B981;
+            --danger: #EF4444;
+            --warning: #F59E0B;
+            --bg: #0B1120;
+            --card: #1F2937;
+            --elevated: #111827;
+            --border: rgba(255,255,255,0.08);
+            --text: #F9FAFB;
+            --muted: #6B7280;
+            --sub: #9CA3AF;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-font-smoothing: antialiased;
+            padding: 24px;
+        }
+
+        /* ── Wizard shell ── */
+        .wizard {
+            width: 100%;
+            max-width: 560px;
+        }
+
+        .wizard-header {
+            text-align: center;
+            margin-bottom: 36px;
+        }
+
+        .wizard-logo {
+            width: 64px;
+            height: 64px;
+            border-radius: 14px;
+            object-fit: contain;
+            margin-bottom: 16px;
+        }
+
+        .wizard-title {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 6px;
+        }
+
+        .wizard-subtitle {
+            font-size: 14px;
+            color: var(--sub);
+            font-weight: 500;
+        }
+
+        /* ── Step indicator ── */
+        .step-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            margin-bottom: 32px;
+        }
+
+        .step-node {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid var(--border);
+            background: var(--elevated);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--muted);
+            position: relative;
+            flex-shrink: 0;
+            transition: all 0.3s;
+        }
+
+        .step-node.active {
+            border-color: var(--accent);
+            background: rgba(99,102,241,0.15);
+            color: var(--accent-hover);
+            box-shadow: 0 0 0 4px rgba(99,102,241,0.15);
+        }
+
+        .step-node.done {
+            border-color: var(--success);
+            background: rgba(16,185,129,0.15);
+            color: var(--success);
+        }
+
+        .step-node.done::after { content: '✓'; font-size: 14px; }
+
+        .step-label {
+            position: absolute;
+            top: 38px;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--muted);
+        }
+
+        .step-node.active .step-label { color: var(--accent-hover); }
+        .step-node.done .step-label { color: var(--success); }
+
+        .step-line {
+            flex: 1;
+            height: 2px;
+            background: var(--border);
+            max-width: 80px;
+            transition: background 0.3s;
+        }
+
+        .step-line.done { background: var(--success); }
+
+        /* ── Card ── */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+
+        .step-panel { display: none; }
+        .step-panel.active { display: block; }
+
+        .step-heading {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            letter-spacing: -0.3px;
+        }
+
+        .step-desc {
+            font-size: 13px;
+            color: var(--sub);
+            margin-bottom: 28px;
+            line-height: 1.5;
+        }
+
+        /* ── Form ── */
+        .form-group { margin-bottom: 20px; }
+
+        label.field-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--sub);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 12px 14px;
+            background: var(--elevated);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            outline: none;
+        }
+
+        input:focus, textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+        }
+
+        input::placeholder, textarea::placeholder { color: #4B5563; }
+
+        .field-hint {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 5px;
+        }
+
+        .field-error {
+            font-size: 12px;
+            color: var(--danger);
+            margin-top: 5px;
+            min-height: 16px;
+        }
+
+        /* ── Password strength ── */
+        .pw-strength {
+            display: flex;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .pw-bar {
+            height: 4px;
+            flex: 1;
+            border-radius: 2px;
+            background: rgba(255,255,255,0.08);
+            transition: background 0.3s;
+        }
+
+        /* ── Logo preview ── */
+        .logo-preview-wrap {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-top: 8px;
+        }
+
+        #logo-preview {
+            width: 56px;
+            height: 56px;
+            border-radius: 10px;
+            object-fit: contain;
+            background: var(--elevated);
+            border: 1px solid var(--border);
+            padding: 4px;
+        }
+
+        /* ── Color picker ── */
+        .color-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 6px;
+        }
+
+        input[type="color"] {
+            width: 44px;
+            height: 40px;
+            border-radius: 8px;
+            padding: 2px;
+            cursor: pointer;
+        }
+
+        .color-hex {
+            width: 110px;
+        }
+
+        /* ── Buttons ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.15s;
+        }
+
+        .btn-accent { background: var(--accent); color: #fff; }
+        .btn-accent:hover { background: var(--accent-hover); }
+        .btn-accent:active { transform: scale(0.98); }
+        .btn-accent:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-ghost {
+            background: rgba(255,255,255,0.06);
+            color: var(--sub);
+            border: 1px solid var(--border);
+        }
+        .btn-ghost:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 28px;
+            justify-content: flex-end;
+        }
+
+        /* ── Error banner ── */
+        .error-banner {
+            background: rgba(239,68,68,0.12);
+            border: 1px solid rgba(239,68,68,0.25);
+            color: #F87171;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-banner.visible { display: block; }
+
+        /* ── Success screen ── */
+        .success-icon {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: rgba(16,185,129,0.15);
+            border: 2px solid var(--success);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 32px;
+        }
+
+        /* ── Spinner ── */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .step-panel.active { animation: fadeUp 0.3s ease-out; }
+
+        /* ── Already-setup notice ── */
+        .already-setup {
+            text-align: center;
+            padding: 20px 0;
+            color: var(--sub);
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="wizard">
+    <!-- Header -->
+    <div class="wizard-header">
+        <img id="wizard-logo" src="https://i.ibb.co/q3NXdhnH/Cologic-LOGO-1.png" alt="Cologic" class="wizard-logo">
+        <div class="wizard-title">Welcome to Cologic</div>
+        <div class="wizard-subtitle">Let's set up your Shop Floor Tracker — this takes about a minute.</div>
+    </div>
+
+    <!-- Step indicator -->
+    <div class="step-bar">
+        <div class="step-node active" id="sn-1">
+            <span class="step-label">Admin Account</span>
+        </div>
+        <div class="step-line" id="sl-1"></div>
+        <div class="step-node" id="sn-2">
+            <span class="step-label">Branding</span>
+        </div>
+        <div class="step-line" id="sl-2"></div>
+        <div class="step-node" id="sn-3">
+            <span class="step-label">Done!</span>
+        </div>
+    </div>
+
+    <!-- Card -->
+    <div class="card">
+        <!-- Error banner -->
+        <div class="error-banner" id="error-banner"></div>
+
+        <!-- ── Step 1: Admin account ── -->
+        <div class="step-panel active" id="step-1">
+            <div class="step-heading">Create your Admin account</div>
+            <div class="step-desc">This will be the owner account with full access to all settings.</div>
+
+            <div class="form-group">
+                <label class="field-label">Username</label>
+                <input type="text" id="admin-username" placeholder="e.g. admin" autocomplete="username">
+                <div class="field-error" id="err-username"></div>
+            </div>
+
+            <div class="form-group">
+                <label class="field-label">Password</label>
+                <input type="password" id="admin-password" placeholder="Choose a strong password" autocomplete="new-password">
+                <div class="pw-strength">
+                    <div class="pw-bar" id="pw-bar-1"></div>
+                    <div class="pw-bar" id="pw-bar-2"></div>
+                    <div class="pw-bar" id="pw-bar-3"></div>
+                    <div class="pw-bar" id="pw-bar-4"></div>
+                </div>
+                <div class="field-error" id="err-password"></div>
+            </div>
+
+            <div class="form-group">
+                <label class="field-label">Confirm Password</label>
+                <input type="password" id="admin-password-confirm" placeholder="Re-enter password" autocomplete="new-password">
+                <div class="field-error" id="err-confirm"></div>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-accent" id="btn-step1-next">Next →</button>
+            </div>
+        </div>
+
+        <!-- ── Step 2: Branding ── -->
+        <div class="step-panel" id="step-2">
+            <div class="step-heading">Company Branding</div>
+            <div class="step-desc">Personalise the dashboard with your company name and logo. You can change these anytime in Settings → Branding.</div>
+
+            <div class="form-group">
+                <label class="field-label">Company Name</label>
+                <input type="text" id="company-name" placeholder="Your Company Name" value="Cologic">
+            </div>
+
+            <div class="form-group">
+                <label class="field-label">Logo URL <span style="font-weight:400;text-transform:none;font-size:11px">(optional)</span></label>
+                <input type="url" id="logo-url" placeholder="https://... (PNG or SVG recommended)">
+                <div class="field-hint">Paste a direct image URL. Leave blank to use the default.</div>
+                <div class="logo-preview-wrap" id="logo-preview-wrap" style="display:none">
+                    <img id="logo-preview" src="" alt="Logo preview">
+                    <span style="font-size:12px;color:var(--sub)">Preview</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="field-label">Brand Color</label>
+                <div class="color-row">
+                    <input type="color" id="brand-color" value="#6366F1">
+                    <input type="text" id="brand-color-hex" value="#6366F1" class="color-hex" placeholder="#6366F1">
+                </div>
+                <div class="field-hint">Used for accent buttons and highlights throughout the dashboard.</div>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-ghost" id="btn-step2-back">← Back</button>
+                <button class="btn btn-accent" id="btn-step2-save">
+                    <div class="spinner" id="save-spinner"></div>
+                    <span id="save-label">Create Account & Save →</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ── Step 3: Success ── -->
+        <div class="step-panel" id="step-3">
+            <div style="text-align:center;padding:16px 0">
+                <div class="success-icon">✓</div>
+                <div class="step-heading" style="text-align:center;margin-bottom:10px">You're all set!</div>
+                <p style="color:var(--sub);font-size:14px;line-height:1.6;margin-bottom:28px">
+                    Your admin account has been created and your branding is saved.<br>
+                    You can now sign in and set up your first camera.
+                </p>
+                <button class="btn btn-accent" id="btn-go-login" style="width:100%;justify-content:center;font-size:15px;padding:14px">
+                    Sign In to Dashboard →
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+'use strict';
+
+const $ = id => document.getElementById(id);
+
+// Redirect to dashboard if already set up
+fetch('/api/setup/status').then(r => r.json()).then(data => {
+    if (data.setup_complete) {
+        window.location.replace('/index.html');
+    }
+}).catch(() => {});
+
+// ── Step navigation ──────────────────────────────────────────
+let currentStep = 1;
+
+function showStep(n) {
+    [1, 2, 3].forEach(i => {
+        $(`step-${i}`).classList.toggle('active', i === n);
+        const node = $(`sn-${i}`);
+        node.classList.remove('active', 'done');
+        if (i < n) { node.classList.add('done'); node.textContent = ''; node.insertAdjacentHTML('afterbegin', '<span class="step-label">' + node.querySelector('.step-label').textContent + '</span>'); }
+        else if (i === n) node.classList.add('active');
+        if (i < 3) $(`sl-${i}`).classList.toggle('done', i < n);
+    });
+    currentStep = n;
+    $('error-banner').classList.remove('visible');
+}
+
+// Fix step node innerHTML to preserve labels
+function initStepNodes() {
+    [1, 2, 3].forEach(i => {
+        const node = $(`sn-${i}`);
+        const label = node.querySelector('.step-label');
+        node._label = label ? label.textContent : '';
+        node._num = i;
+    });
+}
+
+function updateStepNode(nodeEl, state) {
+    // state: 'pending' | 'active' | 'done'
+    nodeEl.classList.remove('active', 'done');
+    if (state === 'done') {
+        nodeEl.classList.add('done');
+        nodeEl.innerHTML = `<span class="step-label">${nodeEl._label}</span>`;
+    } else if (state === 'active') {
+        nodeEl.classList.add('active');
+        nodeEl.innerHTML = `${nodeEl._num}<span class="step-label">${nodeEl._label}</span>`;
+    } else {
+        nodeEl.innerHTML = `${nodeEl._num}<span class="step-label">${nodeEl._label}</span>`;
+    }
+}
+
+function goToStep(n) {
+    [1, 2, 3].forEach(i => {
+        $(`step-${i}`).classList.toggle('active', i === n);
+        const state = i < n ? 'done' : i === n ? 'active' : 'pending';
+        updateStepNode($(`sn-${i}`), state);
+        if (i < 3) $(`sl-${i}`).classList.toggle('done', i < n);
+    });
+    currentStep = n;
+    $('error-banner').classList.remove('visible');
+}
+
+initStepNodes();
+
+// ── Step 1: Admin account ────────────────────────────────────
+function getPasswordStrength(pw) {
+    let score = 0;
+    if (pw.length >= 8) score++;
+    if (pw.length >= 12) score++;
+    if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw) || /[0-9]/.test(pw)) score++;
+    return score; // 0–4
+}
+
+$('admin-password').addEventListener('input', () => {
+    const pw = $('admin-password').value;
+    const score = getPasswordStrength(pw);
+    const colors = ['', '#EF4444', '#F59E0B', '#6366F1', '#10B981'];
+    [1, 2, 3, 4].forEach(i => {
+        $(`pw-bar-${i}`).style.background = i <= score ? (colors[score] || '#6366F1') : 'rgba(255,255,255,0.08)';
+    });
+});
+
+$('btn-step1-next').addEventListener('click', () => {
+    const username = $('admin-username').value.trim();
+    const pw = $('admin-password').value;
+    const pw2 = $('admin-password-confirm').value;
+    let ok = true;
+
+    $('err-username').textContent = '';
+    $('err-password').textContent = '';
+    $('err-confirm').textContent = '';
+
+    if (!username) { $('err-username').textContent = 'Username is required'; ok = false; }
+    else if (!/^[a-zA-Z0-9_]{3,32}$/.test(username)) { $('err-username').textContent = 'Username: 3–32 chars, letters/numbers/underscore only'; ok = false; }
+
+    if (!pw) { $('err-password').textContent = 'Password is required'; ok = false; }
+    else if (pw.length < 6) { $('err-password').textContent = 'Password must be at least 6 characters'; ok = false; }
+
+    if (pw && pw !== pw2) { $('err-confirm').textContent = 'Passwords do not match'; ok = false; }
+
+    if (ok) goToStep(2);
+});
+
+// ── Step 2: Branding ─────────────────────────────────────────
+$('logo-url').addEventListener('input', () => {
+    const url = $('logo-url').value.trim();
+    const wrap = $('logo-preview-wrap');
+    if (url) {
+        $('logo-preview').src = url;
+        wrap.style.display = 'flex';
+    } else {
+        wrap.style.display = 'none';
+    }
+});
+
+$('brand-color').addEventListener('input', () => {
+    $('brand-color-hex').value = $('brand-color').value;
+});
+
+$('brand-color-hex').addEventListener('input', () => {
+    const v = $('brand-color-hex').value.trim();
+    if (/^#[0-9A-Fa-f]{6}$/.test(v)) $('brand-color').value = v;
+});
+
+$('btn-step2-back').addEventListener('click', () => goToStep(1));
+
+$('btn-step2-save').addEventListener('click', async () => {
+    const username = $('admin-username').value.trim();
+    const password = $('admin-password').value;
+    const company_name = $('company-name').value.trim() || 'Cologic';
+    const logo_url = $('logo-url').value.trim();
+    const primary_color = $('brand-color').value;
+
+    const spinner = $('save-spinner');
+    const label = $('save-label');
+    const btn = $('btn-step2-save');
+    const errBanner = $('error-banner');
+
+    spinner.style.display = 'block';
+    label.textContent = 'Creating account…';
+    btn.disabled = true;
+    errBanner.classList.remove('visible');
+
+    try {
+        const res = await fetch('/api/setup/init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, company_name, logo_url, primary_color }),
+        });
+
+        if (res.ok) {
+            goToStep(3);
+        } else {
+            const data = await res.json().catch(() => ({}));
+            errBanner.textContent = data.detail || 'Setup failed — please try again.';
+            errBanner.classList.add('visible');
+        }
+    } catch (e) {
+        errBanner.textContent = 'Cannot reach the server. Is it running?';
+        errBanner.classList.add('visible');
+    } finally {
+        spinner.style.display = 'none';
+        label.textContent = 'Create Account & Save →';
+        btn.disabled = false;
+    }
+});
+
+// ── Step 3: Done ─────────────────────────────────────────────
+$('btn-go-login').addEventListener('click', () => {
+    window.location.replace('/login.html');
+});
+
+// Enter key advances steps
+document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+        if (currentStep === 1) $('btn-step1-next').click();
+        else if (currentStep === 2) $('btn-step2-save').click();
+    }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cologic — Shop Floor Tracker</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <img src="https://i.ibb.co/q3NXdhnH/Cologic-LOGO-1.png" alt="Cologic" class="brand-logo">
+            <div class="brand-info">
+                <span class="brand-text">Cologic</span>
+                <span class="brand-sub">Shop Floor Tracker</span>
+            </div>
+        </div>
+        <ul class="nav-list">
+            <li class="nav-item active" data-page="home">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                <span class="nav-label">Dashboard</span>
+            </li>
+            <li class="nav-item" data-page="cameras">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                <span class="nav-label">Cameras</span>
+            </li>
+            <li class="nav-item" data-page="machines">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3h-8l-2 4h12z"/><circle cx="8" cy="14" r="2"/><circle cx="16" cy="14" r="2"/></svg>
+                <span class="nav-label">Machines</span>
+            </li>
+            <li class="nav-item" data-page="sessions">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span class="nav-label">Sessions</span>
+            </li>
+            <li class="nav-item" data-page="employees">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span class="nav-label">Employees</span>
+            </li>
+            <li class="nav-item" data-page="reports">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <span class="nav-label">Reports</span>
+            </li>
+            <li class="nav-item nav-admin-only" data-page="settings">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span class="nav-label">Settings</span>
+            </li>
+        </ul>
+        <div class="sidebar-footer">
+            <div class="sidebar-version">v2.0.0</div>
+        </div>
+    </nav>
+
+    <!-- Startup Loading Overlay -->
+    <div id="startup-overlay" class="startup-overlay">
+        <div class="startup-inner">
+            <img src="https://i.ibb.co/q3NXdhnH/Cologic-LOGO-1.png" alt="Cologic" class="startup-logo">
+            <div class="startup-title">Cologic Shop Floor Tracker</div>
+            <div class="startup-msg" id="startup-msg">Starting up…</div>
+            <div class="startup-spinner"></div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="content">
+        <!-- Top Bar -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <h1 class="topbar-title">Dashboard</h1>
+                <span class="topbar-breadcrumb">Overview</span>
+            </div>
+            <div class="topbar-right">
+                <div class="topbar-clock-wrap">
+                    <svg class="clock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span class="topbar-clock" id="live-clock">--:--:--</span>
+                </div>
+                <span class="status-pill" id="ws-status" data-status="disconnected">
+                    <span class="status-dot-indicator"></span>
+                    Disconnected
+                </span>
+
+                <!-- Alert Center -->
+                <div class="alert-center" id="alert-center">
+                    <div class="bell-icon-wrap" id="bell-icon-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        <span class="bell-badge" id="bell-badge" style="display:none">0</span>
+                    </div>
+                    <div class="alert-dropdown" id="alert-dropdown">
+                        <div class="alert-dropdown-header">
+                            <span>Recent Alerts</span>
+                            <button class="btn btn-ghost btn-sm" id="btn-clear-alerts" style="font-size:11px;padding:2px 8px">Mark all read</button>
+                        </div>
+                        <div class="alert-dropdown-list" id="alert-dropdown-list">
+                            <!-- Alerts populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <span id="current-user-display" style="font-size:12px;color:var(--text-muted);font-weight:500"></span>
+                <button class="btn btn-ghost btn-sm" id="btn-logout">Logout</button>
+            </div>
+        </header>
+
+        <!-- Connection Lost Banner -->
+        <div class="connection-banner" id="connection-banner" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Connection lost — reconnecting…
+        </div>
+
+        <!-- PAGE: Home -->
+        <section class="page active" id="page-home">
+            <div class="metrics-row">
+                <div class="metric-card metric-workers">
+                    <div class="metric-icon-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                    </div>
+                    <div class="metric-content">
+                        <div class="metric-value" id="metric-workers">0</div>
+                        <div class="metric-label">Workers Active</div>
+                    </div>
+                </div>
+                <div class="metric-card metric-hours">
+                    <div class="metric-icon-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <div class="metric-content">
+                        <div class="metric-value" id="metric-machine-hrs">0.0</div>
+                        <div class="metric-label">Machine Hrs Today</div>
+                    </div>
+                </div>
+                <div class="metric-card metric-efficiency">
+                    <div class="metric-icon-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    </div>
+                    <div class="metric-content">
+                        <div class="metric-value" id="metric-efficiency">—</div>
+                        <div class="metric-label">Avg Efficiency %</div>
+                    </div>
+                </div>
+                <div class="metric-card metric-alerts">
+                    <div class="metric-icon-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    </div>
+                    <div class="metric-content">
+                        <div class="metric-value" id="metric-alerts">0</div>
+                        <div class="metric-label">Open Alerts</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panels-row">
+                <!-- Recent Alerts -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span class="panel-title">Recent Alerts</span>
+                        <span class="panel-badge" id="alerts-count-badge">0</span>
+                    </div>
+                    <div class="panel-body">
+                        <table class="data-table" id="home-alerts-table">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Machine</th>
+                                    <th>Employee</th>
+                                    <th>Time</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="home-alerts-body"></tbody>
+                        </table>
+                        <div class="empty-state" id="home-alerts-empty">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            <p>No alerts today</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Machine Status -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span class="panel-title">Machine Status</span>
+                    </div>
+                    <div class="panel-body">
+                        <ul class="machine-status-list" id="home-machine-list"></ul>
+                        <div class="empty-state" id="home-machines-empty">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3h-8l-2 4h12z"/></svg>
+                            <p>No machines reporting</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Feed -->
+            <div class="panel full-width">
+                <div class="panel-header">
+                    <span class="panel-title">Activity Feed</span>
+                    <span class="panel-subtitle">Real-time events</span>
+                </div>
+                <div class="panel-body">
+                    <ul class="activity-feed" id="activity-feed"></ul>
+                    <div class="empty-state" id="activity-feed-empty">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        <p>No recent activity</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PAGE: Cameras (Guided Wizard) -->
+        <section class="page" id="page-cameras">
+            <div class="cam-setup-layout">
+                <!-- Left: Machine List -->
+                <div class="cam-machine-list">
+                    <div class="cam-machine-list-header">Machines</div>
+                    <ul class="cam-machine-items" id="cam-machine-items"></ul>
+                    <div class="cam-machine-empty" id="cam-machine-empty">No machines set up yet</div>
+                    <button class="btn btn-accent cam-add-btn" id="btn-add-machine">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Add Machine
+                    </button>
+                </div>
+                <!-- Right: Wizard Panel -->
+                <div class="cam-wizard-panel" id="cam-wizard-panel">
+                    <!-- Empty/Welcome state -->
+                    <div class="cam-step cam-welcome" id="cam-welcome">
+                        <div class="cam-welcome-inner">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            <h2>Camera Setup</h2>
+                            <p>Select a machine from the list or add a new one to get started.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 1: Name & Duration -->
+                    <div class="cam-step" id="cam-step-1" hidden>
+                        <div class="cam-step-indicator">
+                            <span class="step-dot active"></span>
+                            <span class="step-line"></span>
+                            <span class="step-dot"></span>
+                            <span class="step-line"></span>
+                            <span class="step-dot"></span>
+                            <span class="step-line"></span>
+                            <span class="step-dot"></span>
+                            <span class="step-line"></span>
+                            <span class="step-dot"></span>
+                        </div>
+                        <h3 class="cam-step-title">Step 1 — Name &amp; Shift Duration</h3>
+                        <div class="cam-form-group">
+                            <label>Machine Name</label>
+                            <input type="text" id="wiz-machine-name" placeholder="e.g. CNC-01" class="input-field">
+                            <span class="cam-field-error" id="wiz-name-error"></span>
+                        </div>
+                        <div class="cam-form-group">
+                            <label>Machine Group / Line (Optional)</label>
+                            <input type="text" id="wiz-machine-group" placeholder="e.g. Line A" class="input-field">
+                        </div>
+                        <div class="cam-form-group">
+                            <label>Daily Shift Hours</label>
+                            <input type="number" id="wiz-shift-hours" placeholder="e.g. 8" min="1" max="24" class="input-field">
+                            <span class="cam-field-error" id="wiz-hours-error"></span>
+                        </div>
+                        <div class="cam-step-actions">
+                            <button class="btn btn-accent" id="wiz-next-1">Next →</button>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Camera Stream -->
+                    <div class="cam-step" id="cam-step-2" hidden>
+                        <div class="cam-step-indicator">
+                            <span class="step-dot completed"></span>
+                            <span class="step-line completed"></span>
+                            <span class="step-dot active"></span>
+                            <span class="step-line"></span>
+                            <span class="step-dot"></span>
+                            <span class="step-line"></span>
+                            <span class="step-dot"></span>
+                            <span class="step-line"></span>
+                            <span class="step-dot"></span>
+                        </div>
+                        <h3 class="cam-step-title">Step 2 — Camera Stream</h3>
+                        <div class="cam-form-group">
+                            <label>RTSP URL</label>
+                            <div class="cam-url-row">
+                                <input type="text" id="wiz-rtsp-url" placeholder="rtsp://admin:pass@192.168.0.x:554/..." class="input-field" style="flex:1">
+                                <button class="btn btn-primary" id="wiz-connect-btn">Connect</button>
+                            </div>
+                        </div>
+                        <div class="cam-stream-status" id="wiz-stream-status" hidden>
+                            <span class="cam-stream-msg" id="wiz-stream-msg">Connecting to camera…</span>
+                        </div>
+                        <div class="cam-stream-preview" id="wiz-stream-preview" hidden>
+                            <img id="wiz-stream-img" src="" alt="Camera preview" class="cam-preview-img">
+                        </div>
+                        <div class="cam-step-actions">
+                            <button class="btn btn-ghost" id="wiz-back-2">← Back</button>
+                            <button class="btn btn-accent" id="wiz-next-2" disabled>Next →</button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Draw Zone -->
+                    <div class="cam-step" id="cam-step-3" hidden>
+                        <div class="cam-step-indicator">
+                            <span class="step-dot completed"></span>
+                            <span class="step-line completed"></span>
+                            <span class="step-dot completed"></span>
+                            <span class="step-line completed"></span>
+                            <span class="step-dot active"></span>
+                            <span class="step-line"></span>
+                            <span class="step-dot"></span>
+                            <span class="step-line"></span>
+                            <span class="step-dot"></span>
+                        </div>
+                        <h3 class="cam-step-title">Step 3 — Draw Detection Zone</h3>
+                        <p class="cam-instruction">Click and drag to draw the zone where the worker stands</p>
+                        <div class="cam-feed-draw" id="wiz-draw-area">
+                            <img id="wiz-draw-img" src="/api/video_feed" alt="Live feed" class="cam-draw-feed">
+                            <canvas id="wiz-draw-canvas" class="cam-draw-canvas"></canvas>
+                        </div>
+                        <p class="cam-zone-hint" id="wiz-zone-hint" hidden>Zone drawn. Drag again to redraw.</p>
+                        <div class="cam-step-actions">
+                            <button class="btn btn-ghost" id="wiz-back-3">← Back</button>
+                            <button class="btn btn-ghost" id="wiz-redraw">Redraw</button>
+                            <button class="btn btn-accent" id="wiz-save-zone" disabled>Save this zone →</button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3b: Draw Light Zone -->
+                    <div class="cam-step" id="cam-step-3b" hidden>
+                        <div class="cam-step-indicator">
+                            <span class="step-dot completed"></span>
+                            <span class="step-line completed"></span>
+                            <span class="step-dot completed"></span>
+                            <span class="step-line completed"></span>
+                            <span class="step-dot completed"></span>
+                            <span class="step-line completed"></span>
+                            <span class="step-dot active"></span>
+                            <span class="step-line"></span>
+                            <span class="step-dot"></span>
+                        </div>
+                        <h3 class="cam-step-title">Step 3b — Draw Light Zone</h3>
+                        <p class="cam-instruction">Draw a small box around the machine's tower indicator light only</p>
+                        <div class="cam-feed-draw" id="wiz-light-draw-area">
+                            <img id="wiz-light-draw-img" src="/api/video_feed" alt="Live feed" class="cam-draw-feed">
+                            <canvas id="wiz-light-draw-canvas" class="cam-draw-canvas cam-light-zone-canvas"></canvas>
+                        </div>
+                        <p class="cam-zone-hint" id="wiz-light-zone-hint" hidden>Light zone drawn. Drag again to redraw.</p>
+                        <div class="cam-step-actions">
+                            <button class="btn btn-ghost" id="wiz-light-back">← Back</button>
+                            <button class="btn btn-ghost" id="wiz-light-skip">Skip (No Light)</button>
+                            <button class="btn btn-ghost" id="wiz-light-redraw">Redraw</button>
+                            <button class="btn btn-accent" id="wiz-light-save" disabled>Save Light Zone →</button>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Save & Confirm -->
+                    <div class="cam-step" id="cam-step-4" hidden>
+                        <div class="cam-step-indicator">
+                            <span class="step-dot completed"></span>
+                            <span class="step-line completed"></span>
+                            <span class="step-dot completed"></span>
+                            <span class="step-line completed"></span>
+                            <span class="step-dot completed"></span>
+                            <span class="step-line completed"></span>
+                            <span class="step-dot completed"></span>
+                            <span class="step-line completed"></span>
+                            <span class="step-dot completed"></span>
+                        </div>
+                        <h3 class="cam-step-title">Step 4 — Complete!</h3>
+                        <div class="cam-saving" id="wiz-saving">
+                            <span class="cam-spinner"></span> Saving machine…
+                        </div>
+                        <div class="cam-saved" id="wiz-saved" hidden>
+                            <div class="cam-success-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="28" height="28"><polyline points="20 6 9 17 4 12"/></svg>
+                            </div>
+                            <p class="cam-success-text">Machine saved and now tracking</p>
+                            <div class="cam-summary" id="wiz-summary"></div>
+                            <div class="cam-step-actions">
+                                <button class="btn btn-accent" id="wiz-add-another">Add Another Machine</button>
+                                <button class="btn btn-primary" id="wiz-go-machines">Go to Machines</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Machine Detail View -->
+                    <div class="cam-step" id="cam-detail-view" hidden>
+                        <h3 class="cam-step-title" id="cam-detail-title">Machine Details</h3>
+                        <div class="cam-detail-info" id="cam-detail-info"></div>
+                        <div class="cam-detail-preview" id="cam-detail-preview">
+                            <img id="cam-detail-img" src="" alt="Camera still" class="cam-preview-img">
+                            <canvas id="cam-detail-canvas" class="cam-draw-canvas"></canvas>
+                        </div>
+                        <div class="cam-step-actions">
+                            <button class="btn btn-primary" id="cam-detail-edit-zone">Edit Zone</button>
+                            <button class="btn btn-danger" id="cam-detail-delete">Delete Machine</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PAGE: Machines (Live Monitor) -->
+        <section class="page" id="page-machines">
+            <div class="machines-empty-state" id="machines-empty-state" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3h-8l-2 4h12z"/></svg>
+                <p>No machines configured yet</p>
+                <button class="btn btn-accent" id="btn-setup-first-machine">Set up your first machine</button>
+            </div>
+            <div class="machines-container" id="machines-container"></div>
+        </section>
+
+        <!-- PAGE: Sessions -->
+        <section class="page" id="page-sessions">
+            <div class="sessions-toolbar">
+                <div class="sessions-toolbar-left">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <input type="date" id="sessions-date" class="date-input">
+                </div>
+                <button class="btn btn-accent" id="btn-load-sessions">Load Sessions</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table sortable-table" id="sessions-table">
+                    <thead>
+                        <tr>
+                            <th data-sort="employee">Employee ⇅</th>
+                            <th data-sort="machine">Machine ⇅</th>
+                            <th data-sort="start">Start ⇅</th>
+                            <th data-sort="end">End ⇅</th>
+                            <th data-sort="duration">Duration ⇅</th>
+                            <th data-sort="status">Status ⇅</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sessions-body"></tbody>
+                </table>
+                <div class="empty-state" id="sessions-empty">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <p>No sessions found</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- PAGE: Employees -->
+        <section class="page" id="page-employees">
+            <div class="employee-form panel">
+                <div class="panel-header">
+                    <span class="panel-title">Register Employee</span>
+                </div>
+                <div class="panel-body form-row">
+                    <div class="form-field">
+                        <input type="text" id="emp-badge-id" placeholder="Badge ID (4-6 digits)" class="input-field">
+                    </div>
+                    <div class="form-field">
+                        <input type="text" id="emp-name" placeholder="Full Name" class="input-field">
+                    </div>
+                    <button class="btn btn-accent" id="btn-register-emp">Register</button>
+                </div>
+                <div class="form-message" id="emp-message"></div>
+            </div>
+            <div class="panel full-width">
+                <div class="panel-header">
+                    <span class="panel-title">All Employees</span>
+                </div>
+                <div class="panel-body">
+                    <table class="data-table" id="employees-table">
+                        <thead>
+                            <tr>
+                                <th>Badge ID</th>
+                                <th>Name</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="employees-body"></tbody>
+                    </table>
+                    <div class="empty-state" id="employees-empty">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                        <p>No employees registered</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PAGE: Reports -->
+        <section class="page" id="page-reports">
+            <div class="reports-toolbar">
+                <div class="reports-toolbar-left">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <input type="date" id="reports-date" class="date-input">
+                </div>
+                <div class="reports-toolbar-right">
+                    <div class="reports-tabs">
+                        <button class="report-tab active" data-report-type="daily">Daily</button>
+                        <button class="report-tab" data-report-type="weekly">Weekly</button>
+                    </div>
+                    <button class="btn btn-accent" id="btn-download-csv">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Download CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Trend Chart Panel -->
+            <div class="panel" style="margin-bottom: 24px; display:none" id="reports-chart-panel">
+                <div class="panel-header">
+                    <span class="panel-title">Active Hours Trend (7 Days)</span>
+                </div>
+                <div class="panel-body" style="height:250px; padding:16px">
+                    <canvas id="trend-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="reports-summary metrics-row">
+                <div class="metric-card metric-hours">
+                    <div class="metric-icon-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <div class="metric-content">
+                        <div class="metric-value" id="report-total-sessions">0</div>
+                        <div class="metric-label">Total Sessions</div>
+                    </div>
+                </div>
+                <div class="metric-card metric-efficiency">
+                    <div class="metric-icon-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    </div>
+                    <div class="metric-content">
+                        <div class="metric-value" id="report-total-hours">0.0</div>
+                        <div class="metric-label">Total Hours</div>
+                    </div>
+                </div>
+                <div class="metric-card metric-workers">
+                    <div class="metric-icon-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                    </div>
+                    <div class="metric-content">
+                        <div class="metric-value" id="report-avg-efficiency">—</div>
+                        <div class="metric-label">Avg Efficiency %</div>
+                    </div>
+                </div>
+                <div class="metric-card metric-alerts">
+                    <div class="metric-icon-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3h-8l-2 4h12z"/></svg>
+                    </div>
+                    <div class="metric-content">
+                        <div class="metric-value" id="report-avg-utilization">—</div>
+                        <div class="metric-label">Avg Utilization %</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trend Banner (weekly only) -->
+            <div class="report-trend-banner" id="report-trend-banner" hidden>
+                <span class="trend-item" id="trend-hours">Hours: —</span>
+                <span class="trend-item" id="trend-utilization">Utilization: —</span>
+                <span class="trend-item" id="trend-efficiency">Efficiency: —</span>
+            </div>
+
+            <div class="panels-row">
+                <!-- Worker Breakdown -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span class="panel-title">Worker Breakdown</span>
+                    </div>
+                    <div class="panel-body">
+                        <table class="data-table" id="report-workers-table">
+                            <thead>
+                                <tr>
+                                    <th>Badge ID</th>
+                                    <th>Name</th>
+                                    <th>Hours</th>
+                                    <th>Efficiency %</th>
+                                </tr>
+                            </thead>
+                            <tbody id="report-workers-body"></tbody>
+                        </table>
+                        <div class="empty-state" id="report-workers-empty">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                            <p>No worker data</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Alert Summary -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span class="panel-title">Alert Summary</span>
+                    </div>
+                    <div class="panel-body">
+                        <table class="data-table" id="report-alerts-table">
+                            <thead>
+                                <tr>
+                                    <th>Alert Type</th>
+                                    <th>Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="report-alerts-body"></tbody>
+                        </table>
+                        <div class="empty-state" id="report-alerts-empty">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            <p>No alerts</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Toast Notification Container -->
+        <div id="toast-container"></div>
+
+        <!-- PAGE: Settings (admin only) -->
+        <section class="page" id="page-settings">
+            <div class="settings-layout">
+
+                <!-- Settings tab sidebar -->
+                <div class="settings-tabs">
+                    <div class="settings-tab-item active" data-tab="detection">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        Detection
+                    </div>
+                    <div class="settings-tab-item" data-tab="light">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+                        Light Detection
+                    </div>
+                    <div class="settings-tab-item" data-tab="shifts">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        Shifts
+                    </div>
+                    <div class="settings-tab-item" data-tab="notifications">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        Notifications
+                    </div>
+                    <div class="settings-tab-item" data-tab="branding">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                        Branding
+                    </div>
+                    <div class="settings-tab-item" data-tab="retention">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.1"/></svg>
+                        Data Retention
+                    </div>
+                    <div class="settings-tab-item" data-tab="users" id="settings-users-tab">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        Users
+                    </div>
+                </div>
+
+                <!-- Settings content area -->
+                <div class="settings-content">
+                    <div id="settings-save-banner" class="settings-save-banner" hidden>
+                        Settings saved successfully.
+                    </div>
+
+                    <!-- Detection Tab -->
+                    <div class="settings-panel active" id="settings-tab-detection">
+                        <h2 class="settings-section-title">Detection Tuning</h2>
+                        <p class="settings-section-desc">Changes take effect on the next processed frame — no restart needed.</p>
+                        <div class="settings-grid">
+                            <div class="settings-field">
+                                <label>Person Confidence Threshold</label>
+                                <span class="settings-hint">Higher = fewer false positives. Range 0.3–0.95</span>
+                                <div class="slider-row">
+                                    <input type="range" id="s-person-conf" min="0.3" max="0.95" step="0.05" value="0.6">
+                                    <span class="slider-val" id="s-person-conf-val">0.60</span>
+                                </div>
+                            </div>
+                            <div class="settings-field">
+                                <label>Grace Period (seconds)</label>
+                                <span class="settings-hint">Time before a session closes after the worker leaves</span>
+                                <input type="number" id="s-grace" min="30" max="600" step="10" value="180" class="input-field settings-input">
+                            </div>
+                            <div class="settings-field">
+                                <label>Stable Frames Required</label>
+                                <span class="settings-hint">Frames of continuous detection to open a session</span>
+                                <input type="number" id="s-stable-frames" min="1" max="20" value="4" class="input-field settings-input">
+                            </div>
+                            <div class="settings-field">
+                                <label>Optical Flow Threshold</label>
+                                <span class="settings-hint">Min movement score to count as "moving". Lower = more sensitive</span>
+                                <div class="slider-row">
+                                    <input type="range" id="s-flow-thresh" min="0.5" max="10.0" step="0.5" value="2.0">
+                                    <span class="slider-val" id="s-flow-thresh-val">2.0</span>
+                                </div>
+                            </div>
+                            <div class="settings-field">
+                                <label>Static Worker Timeout (seconds)</label>
+                                <span class="settings-hint">Time with no movement before ABANDONED alert</span>
+                                <input type="number" id="s-static-timeout" min="60" max="600" step="30" value="180" class="input-field settings-input">
+                            </div>
+                        </div>
+                        <div class="settings-preview-row">
+                            <span class="settings-preview-label">Live Camera Preview</span>
+                            <img src="/api/video_feed" id="settings-preview-img" class="settings-preview-img" alt="Camera feed">
+                        </div>
+                        <button class="btn btn-accent" onclick="saveSettings('detection')">Save Detection Settings</button>
+                    </div>
+
+                    <!-- Light Detection Tab -->
+                    <div class="settings-panel" id="settings-tab-light">
+                        <h2 class="settings-section-title">Light Detection Tuning</h2>
+                        <p class="settings-section-desc">Adjust HSV thresholds to match your specific tower light hardware and lighting conditions.</p>
+                        <div class="settings-grid">
+                            <div class="settings-field">
+                                <label>Enable Light Detection</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="s-light-enabled" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="settings-field">
+                                <label>Alert on RED Light</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="s-light-alert-red" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="settings-field">
+                                <label>Saturation Minimum (0–255)</label>
+                                <span class="settings-hint">Reject dull/gray pixels below this saturation</span>
+                                <div class="slider-row">
+                                    <input type="range" id="s-sat-min" min="0" max="200" step="5" value="30">
+                                    <span class="slider-val" id="s-sat-min-val">30</span>
+                                </div>
+                            </div>
+                            <div class="settings-field">
+                                <label>Brightness Minimum (0–255)</label>
+                                <span class="settings-hint">Reject dark pixels below this brightness</span>
+                                <div class="slider-row">
+                                    <input type="range" id="s-bright-min" min="0" max="255" step="5" value="40">
+                                    <span class="slider-val" id="s-bright-min-val">40</span>
+                                </div>
+                            </div>
+                            <div class="settings-field">
+                                <label>Min Color Pixels (cluster size)</label>
+                                <span class="settings-hint">Minimum vivid pixels needed to register a color</span>
+                                <input type="number" id="s-min-px" min="1" max="200" value="15" class="input-field settings-input">
+                            </div>
+                            <div class="settings-field">
+                                <label>Analysis Upscale Size (px)</label>
+                                <span class="settings-hint">Zone is enlarged to this size for far-light detection</span>
+                                <input type="number" id="s-analysis-size" min="64" max="512" step="16" value="160" class="input-field settings-input">
+                            </div>
+                            <div class="settings-field">
+                                <label>Green Hue Range (OpenCV 0–180)</label>
+                                <div class="range-pair">
+                                    <input type="number" id="s-green-min" min="0" max="180" value="25" class="input-field settings-input-sm"> –
+                                    <input type="number" id="s-green-max" min="0" max="180" value="95" class="input-field settings-input-sm">
+                                </div>
+                            </div>
+                            <div class="settings-field">
+                                <label>Amber Hue Range</label>
+                                <div class="range-pair">
+                                    <input type="number" id="s-amber-min" min="0" max="180" value="10" class="input-field settings-input-sm"> –
+                                    <input type="number" id="s-amber-max" min="0" max="180" value="25" class="input-field settings-input-sm">
+                                </div>
+                            </div>
+                            <div class="settings-field">
+                                <label>Red Hue Range (low end, wraps)</label>
+                                <div class="range-pair">
+                                    <input type="number" id="s-red-low-min" min="0" max="30" value="0" class="input-field settings-input-sm"> –
+                                    <input type="number" id="s-red-low-max" min="0" max="30" value="10" class="input-field settings-input-sm">
+                                </div>
+                            </div>
+                            <div class="settings-field">
+                                <label>Red Hue Range (high end)</label>
+                                <div class="range-pair">
+                                    <input type="number" id="s-red-high-min" min="150" max="180" value="160" class="input-field settings-input-sm"> –
+                                    <input type="number" id="s-red-high-max" min="150" max="180" value="180" class="input-field settings-input-sm">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="settings-preview-row">
+                            <span class="settings-preview-label">Live Light Zone Preview</span>
+                            <img src="/api/video_feed" id="light-preview-img" class="settings-preview-img" alt="Light zone preview">
+                        </div>
+                        <button class="btn btn-accent" onclick="saveSettings('light')">Save Light Settings</button>
+                    </div>
+
+                    <!-- Shifts Tab -->
+                    <div class="settings-panel" id="settings-tab-shifts">
+                        <h2 class="settings-section-title">Shift &amp; Schedule</h2>
+                        <div class="settings-grid">
+                            <div class="settings-field">
+                                <label>Default Shift Hours</label>
+                                <span class="settings-hint">Used for efficiency calculation when no named shift is assigned</span>
+                                <input type="number" id="s-shift-hours" min="1" max="24" step="0.5" value="8" class="input-field settings-input">
+                            </div>
+                        </div>
+                        <div class="settings-field" style="margin-top:20px">
+                            <label>Named Shifts</label>
+                            <span class="settings-hint">Define shift schedules (e.g. Shift A: 06:00–14:00)</span>
+                            <div id="shifts-list" class="shifts-list"></div>
+                            <button class="btn btn-ghost btn-sm" id="btn-add-shift" style="margin-top:10px">+ Add Shift</button>
+                        </div>
+                        <div class="settings-field" style="margin-top:20px">
+                            <label>Holidays</label>
+                            <span class="settings-hint">These days are excluded from expected-hours calculations</span>
+                            <div id="holidays-list" class="shifts-list"></div>
+                            <div style="display:flex;gap:8px;margin-top:8px">
+                                <input type="date" id="holiday-date-input" class="date-input">
+                                <button class="btn btn-ghost btn-sm" id="btn-add-holiday">Add Holiday</button>
+                            </div>
+                        </div>
+                        <button class="btn btn-accent" style="margin-top:20px" onclick="saveSettings('shifts')">Save Shift Settings</button>
+                    </div>
+
+                    <!-- Notifications Tab -->
+                    <div class="settings-panel" id="settings-tab-notifications">
+                        <h2 class="settings-section-title">Notification Settings</h2>
+                        <div class="settings-grid">
+                            <div class="settings-field">
+                                <label>Enable Email Notifications</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="s-email-enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="settings-field">
+                                <label>SMTP Host</label>
+                                <input type="text" id="s-smtp-host" placeholder="smtp.gmail.com" class="input-field settings-input">
+                            </div>
+                            <div class="settings-field">
+                                <label>SMTP Port</label>
+                                <input type="number" id="s-smtp-port" value="587" class="input-field settings-input">
+                            </div>
+                            <div class="settings-field">
+                                <label>SMTP Username</label>
+                                <input type="text" id="s-smtp-user" placeholder="your@email.com" class="input-field settings-input">
+                            </div>
+                            <div class="settings-field">
+                                <label>SMTP Password</label>
+                                <input type="password" id="s-smtp-pass" placeholder="••••••••" class="input-field settings-input">
+                            </div>
+                            <div class="settings-field">
+                                <label>Alert Recipients (one per line)</label>
+                                <textarea id="s-recipients" rows="3" placeholder="manager@company.com&#10;supervisor@company.com" class="input-field settings-input" style="resize:vertical"></textarea>
+                            </div>
+                            <div class="settings-field">
+                                <label>Notify on These Alert Types</label>
+                                <div class="checkbox-group">
+                                    <label class="checkbox-item"><input type="checkbox" id="s-notify-red" checked> Machine RED light</label>
+                                    <label class="checkbox-item"><input type="checkbox" id="s-notify-static" checked> Static worker (ABANDONED)</label>
+                                    <label class="checkbox-item"><input type="checkbox" id="s-notify-camera"> Camera offline</label>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-accent" onclick="saveSettings('notifications')">Save Notification Settings</button>
+                    </div>
+
+                    <!-- Branding Tab -->
+                    <div class="settings-panel" id="settings-tab-branding">
+                        <h2 class="settings-section-title">Branding</h2>
+                        <div class="settings-grid">
+                            <div class="settings-field">
+                                <label>Company Name</label>
+                                <input type="text" id="s-company-name" placeholder="Your Company" class="input-field settings-input">
+                            </div>
+                            <div class="settings-field">
+                                <label>Logo URL</label>
+                                <span class="settings-hint">Direct URL to your logo image (PNG/SVG recommended)</span>
+                                <input type="text" id="s-logo-url" placeholder="https://..." class="input-field settings-input">
+                            </div>
+                            <div class="settings-field">
+                                <label>Logo Preview</label>
+                                <img id="s-logo-preview" src="" alt="Logo preview" style="height:48px;object-fit:contain;border-radius:8px;background:var(--bg-primary);padding:4px;margin-top:6px">
+                            </div>
+                            <div class="settings-field">
+                                <label>Primary Color</label>
+                                <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+                                    <input type="color" id="s-primary-color" value="#6366F1" style="width:44px;height:36px;border:1px solid var(--border-default);border-radius:6px;background:none;cursor:pointer">
+                                    <input type="text" id="s-primary-color-hex" value="#6366F1" class="input-field" style="width:120px">
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-accent" onclick="saveSettings('branding')">Save Branding</button>
+                    </div>
+
+                    <!-- Retention Tab -->
+                    <div class="settings-panel" id="settings-tab-retention">
+                        <h2 class="settings-section-title">Data Retention</h2>
+                        <div class="settings-grid">
+                            <div class="settings-field">
+                                <label>Retention Period (days)</label>
+                                <span class="settings-hint">Sessions older than this are moved to the archive table</span>
+                                <input type="number" id="s-retention-days" min="7" max="730" value="90" class="input-field settings-input">
+                            </div>
+                            <div class="settings-field">
+                                <label>Enable Auto-Archive</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="s-archive-enabled" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="settings-field">
+                                <label>Archive Time</label>
+                                <span class="settings-hint">Daily time to run the archive job (24h format)</span>
+                                <input type="time" id="s-archive-time" value="02:00" class="input-field settings-input">
+                            </div>
+                        </div>
+                        <hr style="border-color:var(--border-subtle);margin:24px 0">
+                        <h3 style="font-size:14px;font-weight:600;color:var(--text-secondary);margin-bottom:12px">Database Backup</h3>
+                        <p class="settings-hint" style="margin-bottom:12px">Download a point-in-time copy of all sessions, alerts, and settings. Auto-backup runs daily to the <code>backups/</code> folder.</p>
+                        <div style="display:flex;gap:12px;flex-wrap:wrap">
+                            <a id="btn-backup-db" href="/api/settings/backup/download" class="btn btn-ghost">⬇ Download Backup</a>
+                            <label class="btn btn-ghost" style="cursor:pointer">
+                                ⬆ Restore from Backup
+                                <input type="file" id="restore-file" accept=".db" style="display:none">
+                            </label>
+                        </div>
+                        <div id="restore-status" style="margin-top:10px;font-size:12px;min-height:18px"></div>
+                        <button class="btn btn-accent" style="margin-top:20px" onclick="saveSettings('retention')">Save Retention Settings</button>
+                    </div>
+
+                    <!-- Users Tab (admin only) -->
+                    <div class="settings-panel" id="settings-tab-users">
+                        <h2 class="settings-section-title">User Management</h2>
+                        <p class="settings-section-desc">Create, view, and remove dashboard user accounts. Admins can manage all roles.</p>
+
+                        <!-- Create user form -->
+                        <div style="background:var(--bg-primary);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:20px;margin-bottom:24px">
+                            <h3 style="font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:16px">Create New User</h3>
+                            <div style="display:grid;grid-template-columns:1fr 1fr 160px;gap:12px;align-items:end">
+                                <div class="settings-field">
+                                    <label>Username</label>
+                                    <input type="text" id="new-user-username" placeholder="username" class="input-field">
+                                </div>
+                                <div class="settings-field">
+                                    <label>Password</label>
+                                    <input type="password" id="new-user-password" placeholder="password" class="input-field">
+                                </div>
+                                <div class="settings-field">
+                                    <label>Role</label>
+                                    <select id="new-user-role" class="input-field">
+                                        <option value="viewer">Viewer</option>
+                                        <option value="supervisor">Supervisor</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:12px;margin-top:14px">
+                                <button class="btn btn-accent" id="btn-create-user">Create User</button>
+                                <span id="create-user-msg" style="font-size:12px;font-weight:500"></span>
+                            </div>
+                        </div>
+
+                        <!-- Users list -->
+                        <div class="table-wrapper">
+                            <table class="data-table" id="users-table">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Role</th>
+                                        <th>Created</th>
+                                        <th>Last Login</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-body"></tbody>
+                            </table>
+                            <div class="empty-state" id="users-empty">
+                                <p>No users found</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- AI Chat Widget -->
+    <div id="ai-chat-fab" onclick="toggleChat()">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+        </svg>
+    </div>
+
+    <div id="ai-chat-panel">
+        <div class="chat-header">
+            <span>Ask Cologic AI</span>
+            <button class="chat-close" onclick="toggleChat()">✕</button>
+        </div>
+        <div class="chat-history" id="chat-history">
+            <div class="chat-msg ai">
+                Hi! I'm your Cologic AI Assistant. You can ask me about current factory alerts, downtime, or machine utilization.
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Ask a question..." onkeypress="handleChatEnter(event)">
+            <button onclick="sendChatMessage()">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" /></svg>
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
