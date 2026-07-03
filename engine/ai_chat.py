@@ -96,9 +96,8 @@ def handle_chat_message(messages: list, repo) -> str:
 
         # 1. Send the user's message and history to Claude, providing the tools
         response = client.messages.create(
-            model="claude-3-haiku-20240307",
+            model="claude-sonnet-5",
             max_tokens=500,
-            temperature=0.4,
             system=system_prompt,
             tools=_TOOLS,
             messages=messages
@@ -167,9 +166,8 @@ def handle_chat_message(messages: list, repo) -> str:
 
             # 4. Get the final answer from Claude
             final_response = client.messages.create(
-                model="claude-3-haiku-20240307",
+                model="claude-sonnet-5",
                 max_tokens=500,
-                temperature=0.4,
                 system=system_prompt,
                 tools=_TOOLS,
                 messages=messages

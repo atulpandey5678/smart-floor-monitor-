@@ -24,10 +24,7 @@
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 <span class="nav-label">Dashboard</span>
             </li>
-            <li class="nav-item" data-page="cameras">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                <span class="nav-label">Cameras</span>
-            </li>
+
             <li class="nav-item" data-page="machines">
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3h-8l-2 4h12z"/><circle cx="8" cy="14" r="2"/><circle cx="16" cy="14" r="2"/></svg>
                 <span class="nav-label">Machines</span>
@@ -36,10 +33,7 @@
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 <span class="nav-label">Sessions</span>
             </li>
-            <li class="nav-item" data-page="employees">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                <span class="nav-label">Employees</span>
-            </li>
+
             <li class="nav-item" data-page="reports">
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                 <span class="nav-label">Reports</span>
@@ -402,6 +396,12 @@
 
         <!-- PAGE: Machines (Live Monitor) -->
         <section class="page" id="page-machines">
+            <div style="display:flex; justify-content:flex-end; padding:16px 24px 0;">
+                <button class="btn btn-accent btn-sm" id="btn-top-setup-camera" onclick="navigateTo('cameras')" style="display:flex; align-items:center; gap:6px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    Camera Wizard
+                </button>
+            </div>
             <div class="machines-empty-state" id="machines-empty-state" hidden>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3h-8l-2 4h12z"/></svg>
                 <p>No machines configured yet</p>
@@ -440,45 +440,7 @@
             </div>
         </section>
 
-        <!-- PAGE: Employees -->
-        <section class="page" id="page-employees">
-            <div class="employee-form panel">
-                <div class="panel-header">
-                    <span class="panel-title">Register Employee</span>
-                </div>
-                <div class="panel-body form-row">
-                    <div class="form-field">
-                        <input type="text" id="emp-badge-id" placeholder="Badge ID (4-6 digits)" class="input-field">
-                    </div>
-                    <div class="form-field">
-                        <input type="text" id="emp-name" placeholder="Full Name" class="input-field">
-                    </div>
-                    <button class="btn btn-accent" id="btn-register-emp">Register</button>
-                </div>
-                <div class="form-message" id="emp-message"></div>
-            </div>
-            <div class="panel full-width">
-                <div class="panel-header">
-                    <span class="panel-title">All Employees</span>
-                </div>
-                <div class="panel-body">
-                    <table class="data-table" id="employees-table">
-                        <thead>
-                            <tr>
-                                <th>Badge ID</th>
-                                <th>Name</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody id="employees-body"></tbody>
-                    </table>
-                    <div class="empty-state" id="employees-empty">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                        <p>No employees registered</p>
-                    </div>
-                </div>
-            </div>
-        </section>
+
 
         <!-- PAGE: Reports -->
         <section class="page" id="page-reports">
@@ -639,7 +601,11 @@
                     </div>
                     <div class="settings-tab-item" data-tab="users" id="settings-users-tab">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                        Users
+                        Admin Users
+                    </div>
+                    <div class="settings-tab-item" data-tab="employees" id="settings-employees-tab">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        Employees
                     </div>
                 </div>
 
@@ -957,6 +923,47 @@
                             </table>
                             <div class="empty-state" id="users-empty">
                                 <p>No users found</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Employees Tab -->
+                    <div class="settings-panel" id="settings-tab-employees">
+                        <h2 class="settings-section-title">Employee Management</h2>
+                        <div class="employee-form panel" style="margin-bottom:24px">
+                            <div class="panel-header">
+                                <span class="panel-title">Register Employee</span>
+                            </div>
+                            <div class="panel-body form-row">
+                                <div class="form-field">
+                                    <input type="text" id="emp-badge-id" placeholder="Badge ID (4-6 digits)" class="input-field">
+                                </div>
+                                <div class="form-field">
+                                    <input type="text" id="emp-name" placeholder="Full Name" class="input-field">
+                                </div>
+                                <button class="btn btn-accent" id="btn-register-emp">Register</button>
+                            </div>
+                            <div class="form-message" id="emp-message"></div>
+                        </div>
+                        <div class="panel full-width">
+                            <div class="panel-header">
+                                <span class="panel-title">All Employees</span>
+                            </div>
+                            <div class="panel-body">
+                                <table class="data-table" id="employees-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Badge ID</th>
+                                            <th>Name</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="employees-body"></tbody>
+                                </table>
+                                <div class="empty-state" id="employees-empty">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                                    <p>No employees registered</p>
+                                </div>
                             </div>
                         </div>
                     </div>

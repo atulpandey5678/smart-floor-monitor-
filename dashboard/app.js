@@ -130,7 +130,6 @@ async function loadPageData(page) {
     if (page === 'home')      await loadHomeData();
     else if (page === 'machines')   await loadMachinesPage();
     else if (page === 'sessions')   await loadSessionsData();
-    else if (page === 'employees')  await loadEmployeesData();
     else if (page === 'reports')    await loadReportsData();
     else if (page === 'settings')   await loadSettingsData();
     else if (page === 'cameras')    initCameraWizardPage();
@@ -777,6 +776,10 @@ function initSettingsTabs() {
             tab.classList.add('active');
             const panel = document.getElementById('settings-tab-' + tab.dataset.tab);
             if (panel) panel.classList.add('active');
+            
+            if (tab.dataset.tab === 'employees') {
+                loadEmployeesData();
+            }
         });
     });
 
@@ -1642,32 +1645,6 @@ function todayStr() {
         .cm-name { font-weight:600; font-size:13px; }
         .cm-state { font-size:11px; padding:2px 8px; border-radius:12px; font-weight:600; }
 
-        #ai-chat-panel { display:none; flex-direction:column; position:fixed; bottom:90px; right:24px;
-            width:360px; height:500px; background:var(--bg-card); border:1px solid var(--border-default);
-            border-radius:var(--radius-xl); box-shadow:var(--shadow-lg); z-index:1000; overflow:hidden; }
-        #ai-chat-panel.chat-open { display:flex; }
-        .chat-header { display:flex; align-items:center; justify-content:space-between;
-            padding:14px 18px; border-bottom:1px solid var(--border-subtle);
-            background:linear-gradient(135deg, #4338CA, #6366F1); color:#fff; font-weight:600; }
-        .chat-close { background:none; border:none; color:#fff; cursor:pointer; font-size:18px; padding:0; line-height:1; }
-        .chat-history { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; }
-        .chat-msg { max-width:85%; padding:10px 14px; border-radius:14px; font-size:13px; line-height:1.5; }
-        .chat-msg.user { background:var(--accent); color:#fff; align-self:flex-end; border-bottom-right-radius:4px; }
-        .chat-msg.ai   { background:var(--bg-elevated); color:var(--text-primary); align-self:flex-start; border-bottom-left-radius:4px; }
-        .chat-msg.chat-typing { animation:pulse 1.2s ease-in-out infinite; }
-        @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
-        .chat-input-area { display:flex; gap:8px; padding:12px; border-top:1px solid var(--border-subtle); }
-        .chat-input-area input { flex:1; background:var(--bg-primary); border:1px solid var(--border-default);
-            border-radius:var(--radius-full); padding:8px 14px; color:var(--text-primary); font-size:13px; outline:none; }
-        .chat-input-area button { background:var(--accent); border:none; border-radius:50%;
-            width:36px; height:36px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-        .chat-input-area button svg { width:16px; height:16px; color:#fff; }
-        #ai-chat-fab { position:fixed; bottom:24px; right:24px; width:56px; height:56px;
-            background:linear-gradient(135deg,#4338CA,#6366F1); border-radius:50%;
-            display:flex; align-items:center; justify-content:center; cursor:pointer;
-            box-shadow:0 4px 20px rgba(99,102,241,0.5); z-index:999; transition:transform 0.2s; }
-        #ai-chat-fab:hover { transform:scale(1.08); }
-        #ai-chat-fab svg { width:26px; height:26px; color:#fff; }
         .machines-empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center;
             padding:60px; color:var(--text-muted); text-align:center; gap:16px; }
         .settings-save-banner { background:var(--success-bg); color:var(--success);
