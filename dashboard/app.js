@@ -80,8 +80,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Employee register
     document.getElementById('btn-register-emp')?.addEventListener('click', registerEmployee);
 
-    // Reports download CSV
+    // Reports download CSV & PDF
     document.getElementById('btn-download-csv')?.addEventListener('click', downloadCSV);
+    document.getElementById('btn-export-pdf')?.addEventListener('click', exportReportToPDF);
 
     // Machines empty-state button
     document.getElementById('btn-setup-first-machine')?.addEventListener('click', () => navigateTo('cameras'));
@@ -285,6 +286,39 @@ function setWsStatus(s) {
     el.innerHTML = `<span class="status-dot-indicator"></span>${s === 'connected' ? 'Live' : 'Disconnected'}`;
 }
 
+// Web Audio API context for zero-dependency sound notifications
+let audioCtx = null;
+function playAlertSound() {
+    try {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        oscillator.type = 'sine';
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        // Short double-chime (A5 then E5)
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); 
+        oscillator.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.15); 
+        
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+        
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + 0.5);
+    } catch (e) {
+        console.warn('Audio play failed (interaction required or not supported):', e);
+    }
+}
+
 function handleWsMessage(data) {
     // State broadcast from server: {state, badge_id, employee_name, active_duration_seconds,
     //   efficiency_percent, machine_id, light_color, light_confidence, …}
@@ -295,7 +329,13 @@ function handleWsMessage(data) {
     // Event notifications
     if (data.event_type) {
         pushActivity(data);
-        if (data.event_type === 'ALERT') refreshAlertBadge();
+        if (data.event_type === 'ALERT') {
+            refreshAlertBadge();
+            // Trigger sound for high priority alerts (machine_red_light)
+            if (data.alert_type === 'machine_red_light' || data.alert_type === 'camera_offline') {
+                playAlertSound();
+            }
+        }
     }
 }
 
@@ -342,6 +382,8 @@ async function loadHomeData() {
 }
 
 async function loadHomeAlerts() {
+    const tbody = document.getElementById('home-alerts-body');
+    if (tbody) tbody.innerHTML = Array(3).fill('<tr><td colspan="5"><div class="skeleton" style="height:28px"></div></td></tr>').join('');
     try {
         const alerts = await api('/api/alerts');
         renderHomeAlertsTable(alerts);
@@ -448,16 +490,11 @@ window.resolveAlertPrompt = async function(id) {
 /* ── 12. MACHINES PAGE ─────────────────────────────────────── */
 async function loadMachinesPage() {
     const container = document.getElementById('machines-container');
-    const emptyState = document.getElementById('machines-empty-state');
-    if (!container) return;
+    if (container) container.innerHTML = Array(2).fill('<div class="machine-card skeleton" style="height:200px;border-radius:12px;"></div>').join('');
     try {
-        const state = await api('/api/status');
-        emptyState.hidden = true;
-        renderMachineCards([state]);
-    } catch (e) {
-        container.innerHTML = '';
-        emptyState.hidden = false;
-    }
+        const machines = await api('/api/machines');
+        renderMachineCards(machines);
+    } catch (e) { console.error('loadMachinesPage', e); }
 }
 
 function renderMachineCards(machines) {
@@ -514,47 +551,53 @@ function updateMachineCardsFromWs(data) {
 
 /* ── 13. SESSIONS PAGE ─────────────────────────────────────── */
 async function loadSessionsData() {
-    const dateEl = document.getElementById('sessions-date');
+    const tbody = document.getElementById('sessions-body');
+    if (tbody) tbody.innerHTML = Array(5).fill('<tr><td colspan="6"><div class="skeleton" style="height:28px"></div></td></tr>').join('');
+    try {
+        const dateEl = document.getElementById('sessions-date');
+        const d = dateEl ? dateEl.value : todayStr();
+        const sessions = await api('/api/sessions?date=' + d);
+        renderSessions(sessions);
+    } catch (e) { toast('Failed to load sessions', 'error'); }
+}
+
+function renderSessions(sessions) {
     const tbody = document.getElementById('sessions-body');
     const empty = document.getElementById('sessions-empty');
     if (!tbody) return;
-    const dateVal = dateEl ? dateEl.value : '';
-    const url = dateVal ? '/api/sessions/today?date=' + dateVal : '/api/sessions/today';
-    try {
-        const sessions = await api(url);
-        tbody.innerHTML = '';
-        if (!sessions || !sessions.length) {
-            if (empty) empty.style.display = 'flex';
-            return;
-        }
-        if (empty) empty.style.display = 'none';
-        tbody.innerHTML = sessions.map(s => {
-            const start = fmtTime(s.start_time);
-            const end = s.end_time ? fmtTime(s.end_time) : '<em>Active</em>';
-            const dur = s.duration_seconds ? formatDuration(s.duration_seconds) : '—';
-            const status = s.end_time ? 'Completed' : 'Active';
-            return `<tr>
-                <td>${escHtml(s.employee_name || s.badge_id || '—')}</td>
-                <td>${escHtml(s.machine_id || 'M-01')}</td>
-                <td>${start}</td>
-                <td>${end}</td>
-                <td>${dur}</td>
-                <td><span class="sess-status ${s.end_time ? 'completed' : 'active'}">${status}</span></td>
-            </tr>`;
-        }).join('');
-    } catch (e) {
-        console.error('loadSessionsData', e);
-        toast('Failed to load sessions', 'error');
+    tbody.innerHTML = '';
+    if (!sessions || !sessions.length) {
+        if (empty) empty.style.display = 'flex';
+        return;
     }
+    if (empty) empty.style.display = 'none';
+    tbody.innerHTML = sessions.map(s => {
+        const start = fmtTime(s.start_time);
+        const end = s.end_time ? fmtTime(s.end_time) : '<em>Active</em>';
+        const dur = s.duration_seconds ? formatDuration(s.duration_seconds) : '—';
+        const status = s.end_time ? 'Completed' : 'Active';
+        return `<tr>
+            <td>${escHtml(s.employee_name || s.badge_id || '—')}</td>
+            <td>${escHtml(s.machine_id || 'M-01')}</td>
+            <td>${start}</td>
+            <td>${end}</td>
+            <td>${dur}</td>
+            <td><span class="sess-status ${s.end_time ? 'completed' : 'active'}">${status}</span></td>
+        </tr>`;
+    }).join('');
 }
 
 /* ── 14. EMPLOYEES PAGE ─────────────────────────────────────── */
 async function loadEmployeesData() {
+    const tbody = document.getElementById('employees-body');
+    const empty = document.getElementById('employees-empty');
+    if (!tbody) return;
+    
+    // Inject skeleton loader
+    tbody.innerHTML = Array(4).fill('<tr><td colspan="3"><div class="skeleton" style="height:28px"></div></td></tr>').join('');
+    
     try {
         const emps = await api('/api/employees');
-        const tbody = document.getElementById('employees-body');
-        const empty = document.getElementById('employees-empty');
-        if (!tbody) return;
         tbody.innerHTML = '';
         if (!emps || !emps.length) {
             if (empty) empty.style.display = 'flex';
@@ -765,6 +808,46 @@ async function downloadCSV() {
         a.click();
         URL.revokeObjectURL(a.href);
     } catch (e) { toast('CSV download failed: ' + e.message, 'error'); }
+}
+
+async function exportReportToPDF() {
+    if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+        toast('PDF libraries not loaded yet.', 'warning');
+        return;
+    }
+    const reportContent = document.querySelector('.reports-content');
+    if (!reportContent) return;
+    
+    const btn = document.getElementById('btn-export-pdf');
+    const oldHtml = btn.innerHTML;
+    btn.innerHTML = 'Generating...';
+    btn.disabled = true;
+
+    try {
+        const canvas = await html2canvas(reportContent, {
+            scale: 2,
+            backgroundColor: getComputedStyle(document.body).getPropertyValue('--bg-primary').trim() || '#121212'
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        pdf.addImage(imgData, 'PNG', 0, 10, pdfWidth, pdfHeight);
+        
+        const dateEl = document.getElementById('reports-date');
+        const dateVal = dateEl ? dateEl.value : todayStr();
+        pdf.save(`Cologic_Report_${currentReportType}_${dateVal}.pdf`);
+        
+        toast('PDF exported successfully!');
+    } catch (e) {
+        console.error('PDF Generation failed', e);
+        toast('PDF Generation failed.', 'error');
+    } finally {
+        btn.innerHTML = oldHtml;
+        btn.disabled = false;
+    }
 }
 
 /* ── 16. SETTINGS PAGE ────────────────────────────────────── */

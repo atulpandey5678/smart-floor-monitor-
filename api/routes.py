@@ -81,12 +81,26 @@ async def get_status():
     return state
 
 
+@router.get("/sessions")
+async def get_sessions(date: Optional[str] = Query(None)):
+    """GET /api/sessions?date=YYYY-MM-DD"""
+    if _repo is None:
+        raise HTTPException(status_code=503, detail="Service not ready")
+    if date:
+        try:
+            parsed = datetime.strptime(date, "%Y-%m-%d").date()
+            return await _repo.get_sessions_for_date(parsed)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date")
+    return await _repo.get_today_sessions()
+
+
 @router.get("/sessions/today")
 async def get_sessions_today():
     """GET /api/sessions/today — all sessions for the current day."""
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
-    return _repo.get_today_sessions()
+    return await _repo.get_today_sessions()
     
 
 @router.get("/sessions/history")
@@ -94,7 +108,7 @@ async def get_sessions_history():
     """GET /api/sessions/history — sessions from the last 7 days."""
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
-    return _repo.get_history_sessions(days=7)
+    return await _repo.get_history_sessions(days=7)
 
 
 @router.get("/alerts")
@@ -102,7 +116,7 @@ async def get_alerts():
     """GET /api/alerts — all unresolved alerts."""
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
-    return _repo.get_unresolved_alerts()
+    return await _repo.get_unresolved_alerts()
 
 
 @router.post("/alerts/{alert_id}/resolve")
@@ -111,7 +125,7 @@ async def resolve_alert(alert_id: int, payload: Optional[AlertResolve] = None):
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
     root_cause = payload.note if payload else None
-    resolved = _repo.resolve_alert(alert_id, root_cause)
+    resolved = await _repo.resolve_alert(alert_id, root_cause)
     if not resolved:
         raise HTTPException(status_code=404, detail="Alert not found or already resolved")
     return {"status": "resolved", "alert_id": alert_id}
@@ -122,7 +136,7 @@ async def get_employees():
     """GET /api/employees — all registered employees."""
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
-    return _repo.get_all_employees()
+    return await _repo.get_all_employees()
 
 
 @router.post("/employees")
@@ -133,7 +147,7 @@ async def create_employee(employee: EmployeeCreate):
     """
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
-    result = _repo.upsert_employee(employee.badge_id, employee.name)
+    result = await _repo.upsert_employee(employee.badge_id, employee.name)
     return result
 
 
@@ -171,7 +185,7 @@ async def get_daily_report(
     from config import SHIFT_HOURS
 
     engine = ReportEngine(_repo, shift_hours=SHIFT_HOURS)
-    report = engine.daily_report(report_date)
+    report = await engine.daily_report(report_date)
 
     if format == "csv":
         csv_content = engine._format_csv(report)
@@ -218,7 +232,7 @@ async def get_weekly_report(
     from config import SHIFT_HOURS
 
     engine = ReportEngine(_repo, shift_hours=SHIFT_HOURS)
-    report = engine.weekly_report(start_date)
+    report = await engine.weekly_report(start_date)
 
     if format == "csv":
         csv_content = engine._format_csv(report)
@@ -260,7 +274,7 @@ async def get_machine_state_events(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date_to format. Use YYYY-MM-DD.")
 
-    return _repo.get_machine_state_events(machine_id, date_from=parsed_from, date_to=parsed_to)
+    return await _repo.get_machine_state_events(machine_id, date_from=parsed_from, date_to=parsed_to)
 
 
 # ── Video Feed (single JPEG frame) ────────────────────────────
@@ -346,7 +360,7 @@ async def get_settings_section(section: str, request: "Request"):
     if section not in VALID_SECTIONS:
         raise HTTPException(status_code=404, detail=f"Unknown settings section '{section}'")
 
-    require_role(request, "admin")
+    await require_role(request, "admin")
     settings = get_settings()
     return settings.section(section)
 
@@ -362,13 +376,13 @@ async def update_settings_section(section: str, data: dict, request: "Request"):
         raise HTTPException(status_code=404, detail=f"Unknown settings section '{section}'")
 
     # Admin-only
-    require_role(request, "admin")
+    await require_role(request, "admin")
 
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
 
     settings = get_settings()
-    settings.set_section(section, data)
+    await settings.set_section(section, data)
 
     import logging
     logging.getLogger(__name__).info("Settings updated: section=%s keys=%s", section, list(data.keys()))
@@ -381,7 +395,7 @@ async def get_all_settings(request: "Request"):
     from api.auth import require_role
     from engine.settings_manager import get_settings, DEFAULTS
 
-    require_role(request, "admin")
+    await require_role(request, "admin")
     settings = get_settings()
     return {section: settings.section(section) for section in VALID_SECTIONS}
 
@@ -397,7 +411,7 @@ async def download_backup(request: "Request"):
     from fastapi.responses import FileResponse
     from api.auth import require_role
 
-    require_role(request, "admin")
+    await require_role(request, "admin")
 
     db_path = DB_PATH
     if not os.path.exists(db_path):
@@ -429,7 +443,7 @@ async def restore_backup(request: "Request"):
     from fastapi import UploadFile, File
     from api.auth import require_role
 
-    require_role(request, "admin")
+    await require_role(request, "admin")
 
     # Parse multipart body manually since we can't use UploadFile in the type hint here
     form = await request.form()
@@ -478,10 +492,10 @@ async def restore_backup(request: "Request"):
 async def delete_employee(employee_id: str, request: "Request"):
     """DELETE /api/employees/{id} — remove an employee record (admin only)."""
     from api.auth import require_role
-    require_role(request, "admin")
+    await require_role(request, "admin")
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
-    _repo.db.execute("DELETE FROM employees WHERE badge_id = ?", (employee_id,))
+    await _repo.db.execute("DELETE FROM employees WHERE badge_id = ?", (employee_id,))
     return {"status": "deleted", "badge_id": employee_id}
 
 
@@ -496,7 +510,7 @@ async def setup_status():
     if _repo is None:
         return {"setup_complete": False}
     try:
-        row = _repo.db.fetch_one("SELECT COUNT(*) as cnt FROM users")
+        row = await _repo.db.fetch_one("SELECT COUNT(*) as cnt FROM users")
         user_count = row["cnt"] if row else 0
         return {"setup_complete": user_count > 0}
     except Exception:
@@ -526,7 +540,7 @@ async def setup_init(body: SetupInitRequest):
 
     # Safety check: abort if any user already exists
     try:
-        row = _repo.db.fetch_one("SELECT COUNT(*) as cnt FROM users")
+        row = await _repo.db.fetch_one("SELECT COUNT(*) as cnt FROM users")
         if row and row["cnt"] > 0:
             raise HTTPException(
                 status_code=409,
@@ -546,7 +560,7 @@ async def setup_init(body: SetupInitRequest):
     # Create the first admin user
     pwd_hash = _hash_password(body.password)
     try:
-        _repo.db.execute(
+        await _repo.db.execute(
             "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
             (body.username.strip(), pwd_hash, "admin"),
         )
@@ -556,11 +570,11 @@ async def setup_init(body: SetupInitRequest):
     # Save branding settings
     try:
         settings = get_settings()
-        settings.set("branding", "company_name", body.company_name or "Cologic")
+        await settings.set("branding", "company_name", body.company_name or "Cologic")
         if body.logo_url:
-            settings.set("branding", "logo_url", body.logo_url)
+            await settings.set("branding", "logo_url", body.logo_url)
         if body.primary_color:
-            settings.set("branding", "primary_color", body.primary_color)
+            await settings.set("branding", "primary_color", body.primary_color)
     except Exception:
         pass  # Branding save is non-fatal
 
@@ -581,7 +595,7 @@ async def get_alerts_history(
     """GET /api/alerts/history — all alerts (resolved + unresolved) for alert center."""
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
-    rows = _repo.db.fetch_all(
+    rows = await _repo.db.fetch_all(
         """SELECT id, badge_id, alert_type, message, resolved, root_cause, created_at
            FROM alerts
            ORDER BY created_at DESC
@@ -596,7 +610,7 @@ async def get_alerts_unread_count():
     """GET /api/alerts/unread-count — count of unresolved alerts."""
     if _repo is None:
         return {"count": 0}
-    row = _repo.db.fetch_one("SELECT COUNT(*) as cnt FROM alerts WHERE resolved = 0")
+    row = await _repo.db.fetch_one("SELECT COUNT(*) as cnt FROM alerts WHERE resolved = 0")
     return {"count": row["cnt"] if row else 0}
 
 
@@ -613,7 +627,7 @@ async def chat_with_ai(request: ChatRequest):
     
     try:
         from engine.ai_chat import handle_chat_message
-        reply = handle_chat_message(request.messages, _repo)
+        reply = await handle_chat_message(request.messages, _repo)
         return {"reply": reply}
     except Exception as e:
         import logging

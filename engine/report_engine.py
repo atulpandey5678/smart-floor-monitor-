@@ -69,10 +69,10 @@ class ReportEngine:
         self.repository = repository
         self.shift_hours = shift_hours
 
-    def daily_report(self, report_date: date) -> DailyReport:
+    async def daily_report(self, report_date: date) -> DailyReport:
         """Compute the daily report for a given calendar day."""
-        sessions = self.repository.get_sessions_for_date(report_date)
-        alerts = self.repository.get_alerts_for_date(report_date)
+        sessions = await self.repository.get_sessions_for_date(report_date)
+        alerts = await self.repository.get_alerts_for_date(report_date)
 
         total_sessions = len(sessions)
         total_seconds = sum(s.get("active_duration_seconds", 0) or 0 for s in sessions)
@@ -121,7 +121,7 @@ class ReportEngine:
             machine_utilization=machine_utilization,
         )
 
-    def weekly_report(self, week_start: date) -> WeeklyReport:
+    async def weekly_report(self, week_start: date) -> WeeklyReport:
         """Compute weekly report aggregating 7 consecutive daily reports."""
         week_end = week_start + timedelta(days=6)
 
@@ -129,7 +129,7 @@ class ReportEngine:
         daily_reports = []
         for i in range(7):
             day = week_start + timedelta(days=i)
-            daily_reports.append(self.daily_report(day))
+            daily_reports.append(await self.daily_report(day))
 
         total_sessions = sum(dr.total_sessions for dr in daily_reports)
         total_active_hours = round(sum(dr.total_active_hours for dr in daily_reports), 4)
@@ -172,7 +172,7 @@ class ReportEngine:
         prev_reports = []
         for i in range(7):
             day = prev_start + timedelta(days=i)
-            prev_reports.append(self.daily_report(day))
+            prev_reports.append(await self.daily_report(day))
 
         prev_total_hours = sum(dr.total_active_hours for dr in prev_reports)
 

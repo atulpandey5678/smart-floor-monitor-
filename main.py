@@ -11,6 +11,7 @@ import threading
 import time
 
 import uvicorn
+import asyncio
 
 from config import API_HOST, API_PORT, MACHINE_ID, DETECTION_ZONE, SHIFT_HOURS, LIGHT_DETECTION_ENABLED, LIGHT_ALERT_ON_RED
 from engine.anti_cheat import AntiCheatEngine
@@ -116,6 +117,15 @@ def get_annotated_frame() -> bytes:
 
 
 def run_cv_pipeline(capture, detector, anticheat, session_mgr, repo, light_detector):
+    def db_sync(coro):
+        import api.server
+        if not api.server._fastapi_loop: return None
+        import asyncio
+        try:
+            return asyncio.run_coroutine_threadsafe(coro, api.server._fastapi_loop).result(timeout=5)
+        except Exception as e:
+            logger.error(f"DB sync error: {e}")
+            return None
     """Main CV processing loop — runs in a background thread.
 
     Processing pipeline per frame:
@@ -339,7 +349,7 @@ def run_cv_pipeline(capture, detector, anticheat, session_mgr, repo, light_detec
             if current_session_id and snapshot.get('state') == 'ACTIVE':
                 if int(active_secs) % 10 == 0 and active_secs > 0:
                     try:
-                        repo.update_session(current_session_id, active_secs, 'ACTIVE')
+                        db_sync(repo.update_session(current_session_id, active_secs, 'ACTIVE'))
                     except Exception:
                         pass
 
@@ -407,7 +417,7 @@ def run_cv_pipeline(capture, detector, anticheat, session_mgr, repo, light_detec
     logger.info("CV pipeline stopped")
 
 
-def scheduled_backup(db_path: str = 'tracker.db', backup_dir: str = 'backups',
+async def scheduled_backup(db_path: str = 'tracker.db', backup_dir: str = 'backups',
                      keep_last: int = 14, interval_hours: float = 24.0):
     """Copy the SQLite DB to a timestamped file in backup_dir and reschedule itself.
 
@@ -421,7 +431,8 @@ def scheduled_backup(db_path: str = 'tracker.db', backup_dir: str = 'backups',
         os.makedirs(backup_dir, exist_ok=True)
         ts = _dt.now().strftime('%Y%m%d_%H%M%S')
         dest = os.path.join(backup_dir, f'cologic_backup_{ts}.db')
-        shutil.copy2(db_path, dest)
+        import asyncio
+        await asyncio.to_thread(shutil.copy2, db_path, dest)
         logger.info("Auto-backup written: %s", dest)
 
         # Prune old backups — keep only the N most recent
@@ -437,15 +448,9 @@ def scheduled_backup(db_path: str = 'tracker.db', backup_dir: str = 'backups',
     except Exception as e:
         logger.error("Auto-backup failed: %s", e)
 
-    # Reschedule
-    t = threading.Timer(interval_hours * 3600, scheduled_backup,
-                        kwargs=dict(db_path=db_path, backup_dir=backup_dir,
-                                    keep_last=keep_last, interval_hours=interval_hours))
-    t.daemon = True
-    t.start()
 
 
-def scheduled_report():
+async def scheduled_report():
     """Runs daily at a specific hour to generate and email reports.
 
     Checks settings.notifications.report_time (e.g. "08:00"). If current time matches,
@@ -472,14 +477,16 @@ def scheduled_report():
                 notifier = get_notifier()
                 if notifier:
                     # Initialize ephemeral repo for this thread
-                    db = Database()
+                    db = await Database().connect()
+                    from db.database import get_database
+                    db = get_database()
                     repo = Repository(db)
                     shift_cfg = settings.section("shifts")
                     shift_hours = float(shift_cfg.get("default_shift_hours", 8.0))
                     engine = ReportEngine(repo, shift_hours)
 
                     yesterday = (now - timedelta(days=1)).date()
-                    daily_rep = engine.daily_report(yesterday)
+                    daily_rep = await engine.daily_report(yesterday)
                     
                     # Generate daily HTML (very simple version for email)
                     ai_summary = engine.generate_ai_summary(daily_rep)
@@ -498,7 +505,7 @@ def scheduled_report():
                     # If it's Monday, send weekly report for the previous week
                     if now.weekday() == 0:
                         prev_monday = yesterday - timedelta(days=6)
-                        weekly_rep = engine.weekly_report(prev_monday)
+                        weekly_rep = await engine.weekly_report(prev_monday)
                         w_html = f"<h3>Weekly Report: {prev_monday.isoformat()} to {yesterday.isoformat()}</h3>"
                         w_html += f"<p>Active Hours: {weekly_rep.total_active_hours} "
                         w_html += f"({weekly_rep.trend.active_hours_change_pct}% vs last week)</p>"
@@ -514,10 +521,6 @@ def scheduled_report():
     except Exception as e:
         logger.error("Auto-report failed: %s", e)
 
-    # Check again in 60 seconds
-    t = threading.Timer(60.0, scheduled_report)
-    t.daemon = True
-    t.start()
 
 
 def main():
@@ -548,7 +551,7 @@ def main():
         logger.error("Fix the above issues and restart. Exiting.")
         sys.exit(1)
 
-    logger.info("Pre-flight checks passed ✓")
+    logger.info("Pre-flight checks passed")
 
     # ── Rotate app.log to keep it clean (keep last 5000 lines) ─
     try:
@@ -563,8 +566,15 @@ def main():
         pass
 
     # Initialize database
-    init_db()
-    db = Database()
+    from db.database import get_database
+    # Since init_db is async now, it must be awaited. Wait, main is not async!
+    # FastAPI lifespan initializes DB! We don't need to do it here.
+    # We can just get the db after FastAPI starts. But CV thread starts here!
+    # Wait, we need to run asyncio event loop to init db if we do it here, 
+    # but the FastAPI server does it anyway. 
+    # Let's just create an event loop, init db, and keep it.
+    import asyncio
+    db = asyncio.run(init_db())
     repo = Repository(db)
     set_repo(repo)
 
@@ -582,13 +592,9 @@ def main():
     )
     _backup_timer.daemon = True
     _backup_timer.start()
-    logger.info("Auto-backup scheduled every 24h → backups/ folder")
+    logger.info("Auto-backup scheduled every 24h -> backups/ folder")
 
     # Start report scheduler
-    _report_timer = threading.Timer(60.0, scheduled_report)
-    _report_timer.daemon = True
-    _report_timer.start()
-    logger.info("Report scheduler started (checks every minute)")
 
     # Initialize CV components (only if available)
     cv_thread = None

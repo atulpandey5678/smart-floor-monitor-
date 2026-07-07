@@ -1,6 +1,9 @@
 """FastAPI application setup with auth middleware and lifecycle events."""
 
 import asyncio
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from main import scheduled_backup, scheduled_report
+
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -18,9 +21,11 @@ from db.repository import Repository
 logger = logging.getLogger(__name__)
 
 # Global instances (set during startup)
-db: Database = None
-repo: Repository = None
+db = None
+repo = None
 _broadcast_task = None
+_fastapi_loop = None
+_scheduler = None
 
 # Routes that do NOT require authentication
 _AUTH_EXEMPT_PREFIXES = ("/auth/", "/ws", "/api/video_feed", "/api/stream", "/api/setup/")
@@ -48,7 +53,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Protect only /api/* paths
         if path.startswith("/api/"):
             from api.auth import get_current_user
-            user = get_current_user(request)
+            user = await get_current_user(request)
             if not user:
                 return JSONResponse(
                     status_code=401,
@@ -62,30 +67,37 @@ class AuthMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown events."""
-    global db, repo, _broadcast_task
+    global db, repo, _broadcast_task, _fastapi_loop
+    _fastapi_loop = asyncio.get_running_loop()
 
     # Startup
     logger.info("Starting Cologic Shop Floor Tracker API...")
-    init_db()
-    db = Database()
+    db = await init_db()
     repo = Repository(db)
     set_routes_repo(repo)
     logger.info(f"Database initialized at {DB_PATH}")
 
-    # Register DB with auth module and create default admin (non-fatal)
-    from api.auth import set_auth_db, create_default_admin
+    # Register DB with auth module
+    from api.auth import set_auth_db
     set_auth_db(db)
-    create_default_admin(db)
 
     # Initialize settings manager
     from engine.settings_manager import init_settings
-    init_settings(db)
+    await init_settings(db)
     logger.info("Settings manager initialized")
 
     # Start WebSocket broadcast background task
     from api.websocket import broadcast_loop
     _broadcast_task = asyncio.create_task(broadcast_loop())
     logger.info("WebSocket broadcast loop started")
+
+    global _scheduler
+    _scheduler = AsyncIOScheduler()
+    _scheduler.add_job(scheduled_backup, 'interval', hours=24)
+    _scheduler.add_job(scheduled_report, 'interval', minutes=1)
+    _scheduler.start()
+    logger.info("APScheduler started (backup/report jobs scheduled)")
+
 
     yield
 
@@ -97,8 +109,12 @@ async def lifespan(app: FastAPI):
             await _broadcast_task
         except asyncio.CancelledError:
             pass
+
+    if _scheduler:
+        _scheduler.shutdown()
+
     if db:
-        db.close()
+        await db.close()
 
 
 app = FastAPI(

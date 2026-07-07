@@ -83,13 +83,12 @@ class SettingsManager:
         self._db = db
         self._lock = threading.Lock()
         self._cache: Dict[str, Dict[str, Any]] = {}
-        if db:
-            self._load_all()
+        
 
-    def _load_all(self):
+    async def _load_all(self):
         """Load all settings from DB into the in-memory cache."""
         try:
-            rows = self._db.fetch_all("SELECT section, key, value FROM app_settings")
+            rows = await self._db.fetch_all("SELECT section, key, value FROM app_settings")
             with self._lock:
                 self._cache = {}
                 for row in rows:
@@ -125,12 +124,12 @@ class SettingsManager:
         defaults.update(overrides)
         return defaults
 
-    def set(self, section: str, key: str, value: Any) -> None:
+    async def set(self, section: str, key: str, value: Any) -> None:
         """Persist a single setting value to DB and update the cache."""
         json_value = json.dumps(value)
         if self._db:
             try:
-                self._db.execute(
+                await self._db.execute(
                     """INSERT INTO app_settings (section, key, value, updated_at)
                        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
                        ON CONFLICT(section, key) DO UPDATE SET value=excluded.value,
@@ -145,25 +144,26 @@ class SettingsManager:
                 self._cache[section] = {}
             self._cache[section][key] = value
 
-    def set_section(self, section: str, values: Dict[str, Any]) -> None:
+    async def set_section(self, section: str, values: Dict[str, Any]) -> None:
         """Persist all keys of a section dict at once."""
         for key, value in values.items():
-            self.set(section, key, value)
+            await self.set(section, key, value)
 
-    def reload(self):
+    async def reload(self):
         """Reload all settings from DB (call after external DB changes)."""
         if self._db:
-            self._load_all()
+            await self._load_all()
 
 
 # Module-level singleton (set at startup via init_settings)
 _settings: Optional[SettingsManager] = None
 
 
-def init_settings(db) -> SettingsManager:
+async def init_settings(db) -> SettingsManager:
     """Initialize the global SettingsManager with the DB instance."""
     global _settings
     _settings = SettingsManager(db)
+    await _settings._load_all()
     return _settings
 
 

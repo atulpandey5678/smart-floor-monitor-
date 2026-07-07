@@ -75,13 +75,13 @@ _TOOLS = [
     }
 ]
 
-def handle_chat_message(messages: list, repo) -> str:
+async def handle_chat_message(messages: list, repo) -> str:
     """Send conversation history to Claude and execute any tool calls."""
     if not CLAUDE_API_KEY or not CLAUDE_API_KEY.startswith("sk-ant"):
         return "The AI Chat feature is currently disabled because the CLAUDE_API_KEY in the .env file is missing or invalid."
 
     try:
-        client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+        client = anthropic.AsyncAnthropic(api_key=CLAUDE_API_KEY)
         
         # Prepare system prompt
         system_prompt = (
@@ -95,7 +95,7 @@ def handle_chat_message(messages: list, repo) -> str:
         )
 
         # 1. Send the user's message and history to Claude, providing the tools
-        response = client.messages.create(
+        response = await client.messages.create(
             model="claude-sonnet-5",
             max_tokens=500,
             system=system_prompt,
@@ -116,7 +116,7 @@ def handle_chat_message(messages: list, repo) -> str:
                 days = tool_args.get("days", 1)
                 cutoff = datetime.now() - timedelta(days=days)
                 # Query DB
-                rows = repo.db.fetch_all(
+                rows = await repo.db.fetch_all(
                     "SELECT alert_type, machine_id, message, created_at, resolved, root_cause "
                     "FROM alerts WHERE created_at >= ? ORDER BY created_at DESC LIMIT 50",
                     (cutoff.isoformat(),)
@@ -124,7 +124,7 @@ def handle_chat_message(messages: list, repo) -> str:
                 tool_result_content = json.dumps([dict(r) for r in rows]) if rows else "No alerts found."
 
             elif tool_name == "get_unresolved_alerts":
-                rows = repo.db.fetch_all(
+                rows = await repo.db.fetch_all(
                     "SELECT id, alert_type, machine_id, message, created_at "
                     "FROM alerts WHERE resolved = 0 ORDER BY created_at DESC"
                 )
@@ -133,7 +133,7 @@ def handle_chat_message(messages: list, repo) -> str:
             elif tool_name == "resolve_alert":
                 alert_id = tool_args.get("alert_id")
                 root_cause = tool_args.get("root_cause")
-                success = repo.resolve_alert(alert_id, root_cause)
+                success = await repo.resolve_alert(alert_id, root_cause)
                 tool_result_content = f"Success: Alert {alert_id} resolved with cause '{root_cause}'." if success else f"Error: Failed to resolve Alert {alert_id}."
 
             elif tool_name == "update_system_setting":
@@ -143,7 +143,7 @@ def handle_chat_message(messages: list, repo) -> str:
                 from engine.settings_manager import get_settings
                 settings = get_settings()
                 if settings:
-                    settings.set(section, key, value)
+                    await settings.set(section, key, value)
                     tool_result_content = f"Success: Updated setting {section}.{key} to {value}."
                 else:
                     tool_result_content = "Error: SettingsManager not initialized."
@@ -165,7 +165,7 @@ def handle_chat_message(messages: list, repo) -> str:
             })
 
             # 4. Get the final answer from Claude
-            final_response = client.messages.create(
+            final_response = await client.messages.create(
                 model="claude-sonnet-5",
                 max_tokens=500,
                 system=system_prompt,

@@ -29,14 +29,14 @@ class Repository:
 
     # ── Employees ──────────────────────────────────────────────
 
-    def upsert_employee(self, badge_id: str, name: str) -> dict:
+    async def upsert_employee(self, badge_id: str, name: str) -> dict:
         """Create or update an employee record.
 
         Uses INSERT OR REPLACE to handle both creation and updates.
         Returns the employee dict.
         """
         try:
-            self.db.execute(
+            await self.db.execute(
                 "INSERT OR REPLACE INTO employees (badge_id, name) VALUES (?, ?)",
                 (badge_id, name),
             )
@@ -46,10 +46,10 @@ class Repository:
             logger.error("Failed to upsert employee %s: %s", badge_id, e)
             raise
 
-    def get_employee(self, badge_id: str) -> Optional[dict]:
+    async def get_employee(self, badge_id: str) -> Optional[dict]:
         """Get a single employee by badge ID. Returns None if not found."""
         try:
-            row = self.db.fetch_one(
+            row = await self.db.fetch_one(
                 "SELECT badge_id, name, created_at FROM employees WHERE badge_id = ?",
                 (badge_id,),
             )
@@ -58,10 +58,10 @@ class Repository:
             logger.error("Failed to get employee %s: %s", badge_id, e)
             raise
 
-    def get_all_employees(self) -> List[dict]:
+    async def get_all_employees(self) -> List[dict]:
         """Get all registered employees."""
         try:
-            rows = self.db.fetch_all(
+            rows = await self.db.fetch_all(
                 "SELECT badge_id, name, created_at FROM employees ORDER BY name"
             )
             return self._rows_to_dicts(rows)
@@ -71,12 +71,12 @@ class Repository:
 
     # ── Date-Range Queries ─────────────────────────────────────
 
-    def get_sessions_for_date(self, target_date: date) -> List[dict]:
+    async def get_sessions_for_date(self, target_date: date) -> List[dict]:
         """Get all sessions that started on a specific calendar date."""
         try:
             day_start = datetime.combine(target_date, datetime.min.time())
             day_end = datetime.combine(target_date + timedelta(days=1), datetime.min.time())
-            rows = self.db.fetch_all(
+            rows = await self.db.fetch_all(
                 """SELECT s.id, s.badge_id, s.machine_id, s.start_time, s.end_time,
                           s.active_duration_seconds, s.active_duration_seconds as duration_seconds,
                           s.state, s.close_reason,
@@ -92,12 +92,12 @@ class Repository:
             logger.error("Failed to get sessions for date %s: %s", target_date, e)
             raise
 
-    def get_alerts_for_date(self, target_date: date) -> List[dict]:
+    async def get_alerts_for_date(self, target_date: date) -> List[dict]:
         """Get all alerts created on a specific calendar date."""
         try:
             day_start = datetime.combine(target_date, datetime.min.time())
             day_end = datetime.combine(target_date + timedelta(days=1), datetime.min.time())
-            rows = self.db.fetch_all(
+            rows = await self.db.fetch_all(
                 """SELECT a.id, a.badge_id, a.alert_type, a.message,
                           a.resolved, a.root_cause, a.created_at,
                           COALESCE(e.name, a.badge_id) as employee_name
@@ -114,10 +114,10 @@ class Repository:
 
     # ── Sessions ──────────────────────────────────────────────
 
-    def create_session(self, badge_id: str, start_time: datetime, machine_id: str = 'M-01') -> int:
+    async def create_session(self, badge_id: str, start_time: datetime, machine_id: str = 'M-01') -> int:
         """Create a new session record. Returns the new session ID."""
         try:
-            cursor = self.db.execute(
+            cursor = await self.db.execute(
                 """INSERT INTO sessions (badge_id, machine_id, start_time, state)
                    VALUES (?, ?, ?, ?)""",
                 (badge_id, machine_id, start_time.isoformat(), "ACTIVE"),
@@ -132,10 +132,10 @@ class Repository:
             logger.error("Failed to create session for %s: %s", badge_id, e)
             raise
 
-    def update_session(self, session_id: int, active_duration: float, state: str):
+    async def update_session(self, session_id: int, active_duration: float, state: str):
         """Update session's active duration and state (for in-progress updates)."""
         try:
-            self.db.execute(
+            await self.db.execute(
                 """UPDATE sessions
                    SET active_duration_seconds = ?, state = ?
                    WHERE id = ?""",
@@ -149,7 +149,7 @@ class Repository:
             logger.error("Failed to update session %d: %s", session_id, e)
             raise
 
-    def close_session(
+    async def close_session(
         self,
         session_id: int,
         end_time: datetime,
@@ -158,7 +158,7 @@ class Repository:
     ):
         """Close a session with end time, final duration, and reason."""
         try:
-            self.db.execute(
+            await self.db.execute(
                 """UPDATE sessions
                    SET end_time = ?, active_duration_seconds = ?,
                        state = 'CLOSED', close_reason = ?
@@ -173,11 +173,11 @@ class Repository:
             logger.error("Failed to close session %d: %s", session_id, e)
             raise
 
-    def get_today_sessions(self) -> List[dict]:
+    async def get_today_sessions(self) -> List[dict]:
         """Get all sessions for the current day."""
         try:
             today_start = datetime.combine(date.today(), datetime.min.time())
-            rows = self.db.fetch_all(
+            rows = await self.db.fetch_all(
                 """SELECT s.id, s.badge_id, s.machine_id, s.start_time, s.end_time,
                           s.active_duration_seconds, s.active_duration_seconds as duration_seconds,
                           s.state, s.close_reason,
@@ -193,13 +193,13 @@ class Repository:
             logger.error("Failed to get today's sessions: %s", e)
             raise
 
-    def get_history_sessions(self, days: int = 7) -> List[dict]:
+    async def get_history_sessions(self, days: int = 7) -> List[dict]:
         """Get sessions from the last N days."""
         try:
             start_date = datetime.combine(
                 date.today() - timedelta(days=days), datetime.min.time()
             )
-            rows = self.db.fetch_all(
+            rows = await self.db.fetch_all(
                 """SELECT s.id, s.badge_id, s.machine_id, s.start_time, s.end_time,
                           s.active_duration_seconds, s.active_duration_seconds as duration_seconds,
                           s.state, s.close_reason,
@@ -215,10 +215,10 @@ class Repository:
             logger.error("Failed to get history sessions: %s", e)
             raise
 
-    def get_active_session(self) -> Optional[dict]:
+    async def get_active_session(self) -> Optional[dict]:
         """Get the currently active session (not in a terminal state)."""
         try:
-            row = self.db.fetch_one(
+            row = await self.db.fetch_one(
                 """SELECT s.id, s.badge_id, s.start_time, s.end_time,
                           s.active_duration_seconds, s.state, s.close_reason,
                           e.name as employee_name
@@ -235,10 +235,10 @@ class Repository:
 
     # ── Alerts ──────────────────────────────────────────────
 
-    def create_alert(self, badge_id: str, alert_type: str, message: str = None) -> int:
+    async def create_alert(self, badge_id: str, alert_type: str, message: str = None) -> int:
         """Create a new alert record. Returns the new alert ID."""
         try:
-            cursor = self.db.execute(
+            cursor = await self.db.execute(
                 """INSERT INTO alerts (badge_id, alert_type, message)
                    VALUES (?, ?, ?)""",
                 (badge_id, alert_type, message),
@@ -253,10 +253,10 @@ class Repository:
             logger.error("Failed to create alert for %s: %s", badge_id, e)
             raise
 
-    def resolve_alert(self, alert_id: int, root_cause: str = None) -> bool:
+    async def resolve_alert(self, alert_id: int, root_cause: str = None) -> bool:
         """Mark an alert as resolved. Returns True if alert was found and updated."""
         try:
-            cursor = self.db.execute(
+            cursor = await self.db.execute(
                 "UPDATE alerts SET resolved = 1, root_cause = ? WHERE id = ? AND resolved = 0",
                 (root_cause, alert_id),
             )
@@ -270,10 +270,10 @@ class Repository:
             logger.error("Failed to resolve alert %d: %s", alert_id, e)
             raise
 
-    def get_unresolved_alerts(self) -> List[dict]:
+    async def get_unresolved_alerts(self) -> List[dict]:
         """Get all unresolved alerts."""
         try:
-            rows = self.db.fetch_all(
+            rows = await self.db.fetch_all(
                 """SELECT a.id, a.badge_id, a.alert_type, a.message,
                           a.resolved, a.root_cause, a.created_at, e.name as employee_name
                    FROM alerts a
@@ -286,10 +286,10 @@ class Repository:
             logger.error("Failed to get unresolved alerts: %s", e)
             raise
 
-    def get_alert(self, alert_id: int) -> Optional[dict]:
+    async def get_alert(self, alert_id: int) -> Optional[dict]:
         """Get a single alert by ID. Returns None if not found."""
         try:
-            row = self.db.fetch_one(
+            row = await self.db.fetch_one(
                 """SELECT id, badge_id, alert_type, message, resolved, root_cause, created_at
                    FROM alerts WHERE id = ?""",
                 (alert_id,),
@@ -301,12 +301,12 @@ class Repository:
 
     # ── Machine State Events ───────────────────────────────────
 
-    def create_machine_state_event(
+    async def create_machine_state_event(
         self, machine_id: str, previous_status: str, new_status: str, timestamp: datetime
     ) -> int:
         """Insert a machine state transition event. Returns the new event ID."""
         try:
-            cursor = self.db.execute(
+            cursor = await self.db.execute(
                 """INSERT INTO machine_state_events (machine_id, previous_status, new_status, timestamp)
                    VALUES (?, ?, ?, ?)""",
                 (machine_id, previous_status, new_status, timestamp.isoformat()),
@@ -321,7 +321,7 @@ class Repository:
             logger.error("Failed to create machine state event: %s", e)
             raise
 
-    def get_machine_state_events(
+    async def get_machine_state_events(
         self, machine_id: str, date_from: Optional[date] = None, date_to: Optional[date] = None
     ) -> List[dict]:
         """Retrieve machine state events for a given machine within a date range.
@@ -343,7 +343,7 @@ class Repository:
                 params.append(day_end.isoformat())
 
             where_clause = " AND ".join(conditions)
-            rows = self.db.fetch_all(
+            rows = await self.db.fetch_all(
                 f"""SELECT id, machine_id, previous_status, new_status, timestamp, created_at
                     FROM machine_state_events
                     WHERE {where_clause}

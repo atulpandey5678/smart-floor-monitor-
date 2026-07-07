@@ -1,7 +1,8 @@
-# Database module - SQLite connection and schema
+# Database module - SQLite connection and schema (Async with aiosqlite)
 import os
+import aiosqlite
 import sqlite3
-import threading
+import asyncio
 
 from config import DB_PATH
 
@@ -74,18 +75,13 @@ CREATE TABLE IF NOT EXISTS app_settings (
 
 
 class Database:
-    """Thread-safe SQLite database wrapper.
-
-    Uses a threading.Lock to serialize access and check_same_thread=False
-    to allow the connection to be shared across threads.
-    """
+    """Asynchronous SQLite database wrapper using aiosqlite."""
 
     def __init__(self, db_path=None):
         self._db_path = db_path or DB_PATH
-        self._lock = threading.Lock()
         self._connection = None
 
-    def connect(self):
+    async def connect(self):
         """Create or return the existing database connection."""
         if self._connection is None:
             # Ensure the directory for the database file exists
@@ -93,103 +89,70 @@ class Database:
             if db_dir:
                 os.makedirs(db_dir, exist_ok=True)
 
-            self._connection = sqlite3.connect(
-                self._db_path, check_same_thread=False
-            )
-            self._connection.row_factory = sqlite3.Row
-            # Disable foreign key enforcement (allow sessions without registered employees)
-            self._connection.execute("PRAGMA foreign_keys = OFF")
+            self._connection = await aiosqlite.connect(self._db_path)
+            self._connection.row_factory = aiosqlite.Row
+            # Disable foreign key enforcement
+            await self._connection.execute("PRAGMA foreign_keys = OFF")
         return self._connection
 
-    @property
-    def connection(self):
-        """Property access to the underlying connection."""
-        return self.connect()
+    async def execute(self, sql, params=()):
+        """Execute a SQL statement asynchronously."""
+        conn = await self.connect()
+        cursor = await conn.execute(sql, params)
+        await conn.commit()
+        return cursor
 
-    @property
-    def lock(self):
-        """Expose the lock for external use if needed."""
-        return self._lock
-
-    def execute(self, sql, params=()):
-        """Execute a SQL statement with thread-safe locking."""
-        with self._lock:
-            conn = self.connect()
-            cursor = conn.execute(sql, params)
-            conn.commit()
-            return cursor
-
-    def executemany(self, sql, params_list):
+    async def executemany(self, sql, params_list):
         """Execute a SQL statement against multiple parameter sets."""
-        with self._lock:
-            conn = self.connect()
-            cursor = conn.executemany(sql, params_list)
-            conn.commit()
-            return cursor
+        conn = await self.connect()
+        cursor = await conn.executemany(sql, params_list)
+        await conn.commit()
+        return cursor
 
-    def fetch_one(self, sql, params=()):
+    async def fetch_one(self, sql, params=()):
         """Execute a query and return a single row."""
-        with self._lock:
-            conn = self.connect()
-            cursor = conn.execute(sql, params)
-            return cursor.fetchone()
+        conn = await self.connect()
+        cursor = await conn.execute(sql, params)
+        return await cursor.fetchone()
 
-    def fetch_all(self, sql, params=()):
+    async def fetch_all(self, sql, params=()):
         """Execute a query and return all rows."""
-        with self._lock:
-            conn = self.connect()
-            cursor = conn.execute(sql, params)
-            return cursor.fetchall()
+        conn = await self.connect()
+        cursor = await conn.execute(sql, params)
+        return await cursor.fetchall()
 
-    def close(self):
+    async def close(self):
         """Close the database connection."""
-        with self._lock:
-            if self._connection:
-                self._connection.close()
-                self._connection = None
+        if self._connection:
+            await self._connection.close()
+            self._connection = None
 
-    def create_tables(self):
+    async def create_tables(self):
         """Create all schema tables if they don't exist."""
-        with self._lock:
-            conn = self.connect()
-            conn.executescript(_SCHEMA_SQL)
-            # Migration for root_cause in alerts
-            try:
-                conn.execute("ALTER TABLE alerts ADD COLUMN root_cause TEXT")
-                conn.commit()
-            except sqlite3.OperationalError:
-                pass # Column already exists
+        conn = await self.connect()
+        await conn.executescript(_SCHEMA_SQL)
+        # Migration for root_cause in alerts
+        try:
+            await conn.execute("ALTER TABLE alerts ADD COLUMN root_cause TEXT")
+            await conn.commit()
+        except sqlite3.OperationalError:
+            pass # Column already exists
 
 
 # Module-level singleton instance
 _db_instance = None
-_instance_lock = threading.Lock()
-
 
 def get_database():
     """Get or create the module-level Database singleton."""
     global _db_instance
     if _db_instance is None:
-        with _instance_lock:
-            if _db_instance is None:
-                _db_instance = Database()
+        _db_instance = Database()
     return _db_instance
 
-
-def init_db():
+async def init_db():
     """Initialize the database: create the file and all tables.
-
     Returns the Database instance for convenience.
     """
     db = get_database()
-    db.create_tables()
+    await db.create_tables()
     return db
-
-
-def get_connection():
-    """Return the thread-safe SQLite connection.
-
-    Ensures the database is initialized before returning.
-    """
-    db = get_database()
-    return db.connect()

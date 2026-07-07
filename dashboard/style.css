@@ -2491,3 +2491,20 @@ select.input-field option {
     width: 20px;
     height: 20px;
 }
+
+/* Skeleton Loaders */
+.skeleton {
+    background: linear-gradient(90deg, var(--bg-primary) 25%, var(--bg-elevated) 50%, var(--bg-primary) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 4px;
+    color: transparent !important;
+    pointer-events: none;
+}
+.skeleton * {
+    visibility: hidden;
+}
+@keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
