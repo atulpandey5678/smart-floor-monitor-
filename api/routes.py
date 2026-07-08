@@ -1,33 +1,20 @@
 """REST API routes for Shop Floor Tracker."""
 
-import re
-import time
 from datetime import date, datetime, timedelta
 from dataclasses import asdict
-from typing import Optional, Any
-from pydantic import BaseModel, field_validator
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 
-router = APIRouter(prefix="/api")
+from api.schemas import (
+    AlertResolve,
+    CameraZonePayload,
+    ChatRequest,
+    EmployeeCreate,
+    SettingsUpdate,
+)
 
-# ── Request/Response Models ──────────────────────────────────
-
-
-class EmployeeCreate(BaseModel):
-    badge_id: str
-    name: str
-
-    @field_validator('badge_id')
-    @classmethod
-    def validate_badge_id(cls, v):
-        if not re.match(r'^\d{4,6}$', v):
-            raise ValueError('Badge ID must be 4-6 numeric digits')
-        return v
-
-
-class AlertResolve(BaseModel):
-    note: Optional[str] = None
+router = APIRouter()
 
 
 # ── Shared State (set from server.py) ────────────────────────
@@ -81,42 +68,85 @@ async def get_status():
     return state
 
 
+
+
 @router.get("/sessions")
-async def get_sessions(date: Optional[str] = Query(None)):
-    """GET /api/sessions?date=YYYY-MM-DD"""
+async def get_sessions(
+    date: Optional[str] = Query(None),
+    machine_id: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """GET /api/sessions?date=YYYY-MM-DD&machine_id=M-01&page=1&page_size=20"""
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
+
+    from api.pagination import PaginationParams, paginated_response
+    pagination = PaginationParams(page, page_size)
+
     if date:
         try:
             parsed = datetime.strptime(date, "%Y-%m-%d").date()
             return await _repo.get_sessions_for_date(parsed)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date")
-    return await _repo.get_today_sessions()
+
+    items = await _repo.get_today_sessions(
+        machine_id=machine_id, limit=pagination.limit, offset=pagination.offset
+    )
+    total = await _repo.count_today_sessions(machine_id=machine_id)
+    return paginated_response(items, total, pagination.page, pagination.page_size)
 
 
 @router.get("/sessions/today")
-async def get_sessions_today():
-    """GET /api/sessions/today — all sessions for the current day."""
+async def get_sessions_today(
+    machine_id: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """GET /api/sessions/today — sessions for the current day with optional machine_id filter."""
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
-    return await _repo.get_today_sessions()
+    from api.pagination import PaginationParams, paginated_response
+    params = PaginationParams(page, page_size)
+    items = await _repo.get_today_sessions(machine_id=machine_id, limit=params.limit, offset=params.offset)
+    total = await _repo.count_today_sessions(machine_id=machine_id)
+    return paginated_response(items, total, params.page, params.page_size)
     
 
 @router.get("/sessions/history")
-async def get_sessions_history():
-    """GET /api/sessions/history — sessions from the last 7 days."""
+async def get_sessions_history(
+    machine_id: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """GET /api/sessions/history — sessions from the last 7 days with optional machine_id filter."""
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
-    return await _repo.get_history_sessions(days=7)
+    from api.pagination import PaginationParams, paginated_response
+    params = PaginationParams(page, page_size)
+    items = await _repo.get_history_sessions(days=7, machine_id=machine_id, limit=params.limit, offset=params.offset)
+    total = await _repo.count_history_sessions(days=7, machine_id=machine_id)
+    return paginated_response(items, total, params.page, params.page_size)
 
 
 @router.get("/alerts")
-async def get_alerts():
-    """GET /api/alerts — all unresolved alerts."""
+async def get_alerts(
+    machine_id: Optional[str] = Query(None),
+    resolved: Optional[bool] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """GET /api/alerts — alerts with optional machine_id and resolved filters (paginated)."""
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
-    return await _repo.get_unresolved_alerts()
+    from api.pagination import PaginationParams, paginated_response
+    params = PaginationParams(page, page_size)
+    items = await _repo.get_unresolved_alerts(
+        machine_id=machine_id, resolved=resolved, limit=params.limit, offset=params.offset
+    )
+    total = await _repo.count_unresolved_alerts(machine_id=machine_id, resolved=resolved)
+    return paginated_response(items, total, params.page, params.page_size)
 
 
 @router.post("/alerts/{alert_id}/resolve")
@@ -132,11 +162,18 @@ async def resolve_alert(alert_id: int, payload: Optional[AlertResolve] = None):
 
 
 @router.get("/employees")
-async def get_employees():
-    """GET /api/employees — all registered employees."""
+async def get_employees(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """GET /api/employees — all registered employees (paginated)."""
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
-    return await _repo.get_all_employees()
+    from api.pagination import PaginationParams, paginated_response
+    params = PaginationParams(page, page_size)
+    items = await _repo.get_all_employees(limit=params.limit, offset=params.offset)
+    total = await _repo.count_employees()
+    return paginated_response(items, total, params.page, params.page_size)
 
 
 @router.post("/employees")
@@ -291,26 +328,54 @@ def set_frame_provider(fn):
 
 
 @router.post("/camera/zones")
-async def save_camera_zones(data: dict):
+async def save_camera_zones(data: CameraZonePayload):
     """POST /api/camera/zones — Save machine zone configuration from the wizard.
 
-    If the body includes a 'lightZone' field, updates the live LightDetector zone.
+    Persists the machine config server-side and updates the live LightDetector zone.
     """
-    light_zone = data.get('lightZone')
-    if light_zone and isinstance(light_zone, dict):
+    from engine.settings_manager import get_settings
+    import structlog as _log
+
+    # Persist machine config server-side so it survives browser/localStorage wipes
+    machine_id = data.machine_id
+    if machine_id:
+        try:
+            settings = get_settings()
+            machines = settings.get("machines", "list", [])
+            if not isinstance(machines, list):
+                machines = []
+            # Replace existing entry or append
+            existing = next((i for i, m in enumerate(machines)
+                             if m.get("id") == machine_id or m.get("machineName") == machine_id
+                             or m.get("name") == machine_id), None)
+            # Convert to dict, including extra fields from wizard
+            entry = data.model_dump(exclude_none=True)
+            entry["id"] = machine_id
+            entry["machine_id"] = machine_id
+            if existing is not None:
+                machines[existing] = entry
+            else:
+                machines.append(entry)
+            await settings.set("machines", "list", machines)
+            _log.getLogger(__name__).info("Machine config saved: %s (%d total)", machine_id, len(machines))
+        except Exception as ex:
+            _log.getLogger(__name__).warning("Failed to persist machine config: %s", ex)
+
+    # Update the live LightDetector zone if a lightZone is included
+    if data.lightZone:
         try:
             zone_tuple = (
-                float(light_zone['x1']),
-                float(light_zone['y1']),
-                float(light_zone['x2']),
-                float(light_zone['y2']),
+                data.lightZone.x1,
+                data.lightZone.y1,
+                data.lightZone.x2,
+                data.lightZone.y2,
             )
             if _light_detector:
                 _light_detector.set_zone(zone_tuple)
-                import logging
-                logging.getLogger(__name__).info("Light zone updated from wizard: %s", zone_tuple)
+                _log.getLogger(__name__).info(
+                    "Light zone updated from wizard: %s", zone_tuple)
         except (KeyError, ValueError, TypeError):
-            pass  # Ignore malformed lightZone data
+            pass
 
     return {"status": "saved"}
 
@@ -334,9 +399,9 @@ async def video_feed():
     # Return a dark placeholder with "Connecting…" text
     placeholder = np.zeros((360, 640, 3), dtype=np.uint8)
     placeholder[:] = (18, 27, 42)  # dark navy
-    cv2.putText(placeholder, "Connecting to camera...", (160, 175),
+    cv2.putText(placeholder, "No camera configured", (180, 175),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (150, 150, 150), 2)
-    cv2.putText(placeholder, "rtsp://192.168.0.36", (210, 210),
+    cv2.putText(placeholder, "Add a camera via Camera Setup", (155, 210),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (80, 80, 80), 1)
     _, jpeg = cv2.imencode('.jpg', placeholder)
     return Response(
@@ -346,9 +411,30 @@ async def video_feed():
     )
 
 
+@router.get("/stream")
+async def video_stream():
+    """GET /api/stream — MJPEG video stream at up to 25 FPS."""
+    import asyncio
+    from fastapi.responses import StreamingResponse
+
+    async def frame_generator():
+        last_frame = None
+        while True:
+            if _get_frame_fn:
+                frame_bytes = _get_frame_fn()
+                # Only push a new frame if it changed (avoids duplicate sends)
+                if frame_bytes and frame_bytes is not last_frame:
+                    last_frame = frame_bytes
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            await asyncio.sleep(0.033)  # Max ~30 FPS
+
+    return StreamingResponse(frame_generator(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
 # ── Settings API (admin only) ─────────────────────────────────
 
-VALID_SECTIONS = {"detection", "light", "shifts", "notifications", "branding", "retention"}
+VALID_SECTIONS = {"detection", "light", "shifts", "notifications", "branding", "retention", "system"}
 
 
 @router.get("/settings/{section}")
@@ -366,9 +452,8 @@ async def get_settings_section(section: str, request: "Request"):
 
 
 @router.put("/settings/{section}")
-async def update_settings_section(section: str, data: dict, request: "Request"):
+async def update_settings_section(section: str, data: SettingsUpdate, request: "Request"):
     """PUT /api/settings/{section} — Update settings for a section (admin only)."""
-    from fastapi import Request
     from api.auth import require_role
     from engine.settings_manager import get_settings
 
@@ -382,10 +467,12 @@ async def update_settings_section(section: str, data: dict, request: "Request"):
         raise HTTPException(status_code=503, detail="Service not ready")
 
     settings = get_settings()
-    await settings.set_section(section, data)
+    # Convert to dict for storage, excluding unset fields
+    settings_data = data.model_dump(exclude_unset=True)
+    await settings.set_section(section, settings_data)
 
-    import logging
-    logging.getLogger(__name__).info("Settings updated: section=%s keys=%s", section, list(data.keys()))
+    import structlog
+    structlog.get_logger(__name__).info("Settings updated", section=section, keys=list(settings_data.keys()))
     return {"status": "saved", "section": section}
 
 
@@ -481,8 +568,8 @@ async def restore_backup(request: "Request"):
     # Replace the live DB
     shutil.move(tmp.name, db_path)
 
-    import logging
-    logging.getLogger(__name__).warning("Database restored from backup upload by admin")
+    import structlog
+    structlog.get_logger(__name__).warning("Database restored from backup upload by admin")
     return {"status": "restored", "message": "Database replaced. Restart the server for full effect."}
 
 
@@ -499,90 +586,12 @@ async def delete_employee(employee_id: str, request: "Request"):
     return {"status": "deleted", "badge_id": employee_id}
 
 
-# ── First-Run Setup ───────────────────────────────────────────
+# ── First-Run Setup (disabled — fixed credentials seeded on startup) ──────
 
 @router.get("/setup/status")
 async def setup_status():
-    """GET /api/setup/status — returns whether initial setup has been completed.
-
-    Returns {setup_complete: bool}. Auth-exempt so setup.html can call it freely.
-    """
-    if _repo is None:
-        return {"setup_complete": False}
-    try:
-        row = await _repo.db.fetch_one("SELECT COUNT(*) as cnt FROM users")
-        user_count = row["cnt"] if row else 0
-        return {"setup_complete": user_count > 0}
-    except Exception:
-        return {"setup_complete": False}
-
-
-class SetupInitRequest(BaseModel):
-    username: str
-    password: str
-    company_name: str = "Cologic"
-    logo_url: str = ""
-    primary_color: str = "#6366F1"
-
-
-@router.post("/setup/init")
-async def setup_init(body: SetupInitRequest):
-    """POST /api/setup/init — create the first admin account and branding.
-
-    Only succeeds if NO users exist yet (prevents privilege escalation).
-    Auth-exempt so it works before any user is created.
-    """
-    from api.auth import _hash_password, _create_session
-    from engine.settings_manager import get_settings
-
-    if _repo is None:
-        raise HTTPException(status_code=503, detail="Service not ready")
-
-    # Safety check: abort if any user already exists
-    try:
-        row = await _repo.db.fetch_one("SELECT COUNT(*) as cnt FROM users")
-        if row and row["cnt"] > 0:
-            raise HTTPException(
-                status_code=409,
-                detail="Setup already completed — admin account exists"
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    # Validate inputs
-    if not body.username.strip():
-        raise HTTPException(status_code=400, detail="Username cannot be empty")
-    if len(body.password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-
-    # Create the first admin user
-    pwd_hash = _hash_password(body.password)
-    try:
-        await _repo.db.execute(
-            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-            (body.username.strip(), pwd_hash, "admin"),
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create user: {e}")
-
-    # Save branding settings
-    try:
-        settings = get_settings()
-        await settings.set("branding", "company_name", body.company_name or "Cologic")
-        if body.logo_url:
-            await settings.set("branding", "logo_url", body.logo_url)
-        if body.primary_color:
-            await settings.set("branding", "primary_color", body.primary_color)
-    except Exception:
-        pass  # Branding save is non-fatal
-
-    import logging
-    logging.getLogger(__name__).info(
-        "First-run setup completed. Admin user '%s' created.", body.username
-    )
-    return {"status": "setup_complete", "username": body.username}
+    """GET /api/setup/status — always returns setup_complete: true (fixed credentials)."""
+    return {"setup_complete": True}
 
 
 # ── Alert history (for bell/alert center) ────────────────────
@@ -595,14 +604,7 @@ async def get_alerts_history(
     """GET /api/alerts/history — all alerts (resolved + unresolved) for alert center."""
     if _repo is None:
         raise HTTPException(status_code=503, detail="Service not ready")
-    rows = await _repo.db.fetch_all(
-        """SELECT id, badge_id, alert_type, message, resolved, root_cause, created_at
-           FROM alerts
-           ORDER BY created_at DESC
-           LIMIT ? OFFSET ?""",
-        (limit, offset),
-    )
-    return [dict(r) for r in rows]
+    return await _repo.get_alerts_history(limit=limit, offset=offset)
 
 
 @router.get("/alerts/unread-count")
@@ -616,9 +618,6 @@ async def get_alerts_unread_count():
 
 # ── AI Chat ──────────────────────────────────────────────────
 
-class ChatRequest(BaseModel):
-    messages: list[dict[str, Any]]
-
 @router.post("/ai/chat")
 async def chat_with_ai(request: ChatRequest):
     """POST /api/ai/chat — Converse with Claude, powered by Anthropic Tool Calling."""
@@ -627,9 +626,67 @@ async def chat_with_ai(request: ChatRequest):
     
     try:
         from engine.ai_chat import handle_chat_message
-        reply = await handle_chat_message(request.messages, _repo)
+        # Convert validated ChatMessage objects back to dicts for the engine
+        messages = [msg.model_dump() for msg in request.messages]
+        reply = await handle_chat_message(messages, _repo)
         return {"reply": reply}
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error("Chat endpoint error: %s", e)
+        import structlog
+        structlog.get_logger(__name__).error("Chat endpoint error", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to process chat message")
+
+
+# ── Machine Config persistence (server-side) ──────────────────
+# Machines are stored in app_settings as section="machines", key=machine_id
+
+@router.get("/machines")
+async def get_machines(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """GET /api/machines — return all saved machine configurations (paginated)."""
+    from engine.settings_manager import get_settings
+    from api.pagination import PaginationParams, paginated_response
+    settings = get_settings()
+    machines_data = settings.get("machines", "list", [])
+    params = PaginationParams(page, page_size)
+    total = len(machines_data)
+    paginated_items = machines_data[params.offset : params.offset + params.limit]
+    return paginated_response(paginated_items, total, params.page, params.page_size)
+
+
+@router.delete("/machines/{machine_id}")
+async def delete_machine(machine_id: str, request: Request):
+    """DELETE /api/machines/{machine_id} — remove a machine (admin only)."""
+    from api.auth import require_role
+    from engine.settings_manager import get_settings
+    await require_role(request, "admin")
+    settings = get_settings()
+    machines = settings.get("machines", "list", [])
+    machines = [m for m in machines if m.get("id") != machine_id and m.get("name") != machine_id]
+    await settings.set("machines", "list", machines)
+    return {"status": "deleted", "machine_id": machine_id}
+
+
+# ── Backup download ───────────────────────────────────────────
+
+@router.get("/settings/backup/download")
+async def download_backup(request: Request):
+    """GET /api/settings/backup/download — download a copy of the SQLite DB."""
+    from api.auth import require_role
+    from fastapi.responses import FileResponse
+    import shutil, tempfile
+    require_role(request, "admin")
+    from config import DB_PATH
+    # Copy DB to a temp file so the response can safely read it
+    tmp = tempfile.mktemp(suffix=".db")
+    try:
+        shutil.copy2(DB_PATH, tmp)
+        return FileResponse(
+            path=tmp,
+            media_type="application/octet-stream",
+            filename="cologic_backup.db",
+        )
+    except Exception as ex:
+        raise HTTPException(status_code=500, detail=f"Backup failed: {ex}")

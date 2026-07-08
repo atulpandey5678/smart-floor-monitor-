@@ -1,0 +1,52 @@
+[project]
+name = "cologic-shop-floor-tracker"
+version = "3.0.0"
+description = "Multi-machine shop floor worker presence tracker with computer vision"
+requires-python = ">=3.10"
+
+dynamic = ["dependencies"]
+
+[project.scripts]
+cologic-tracker = "main:main"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "--cov=.",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-config=pyproject.toml",
+    "-v",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests requiring full stack",
+]
+
+[tool.coverage.run]
+source = ["api", "engine", "cv_pipeline", "db"]
+omit = [
+    "tests/*",
+    "scratch/*",
+    "dashboard/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+]

@@ -166,16 +166,9 @@
         const btn  = document.getElementById('login-btn');
         const err  = document.getElementById('error-msg');
 
-        // Redirect to setup wizard if no admin exists yet
-        fetch('/api/setup/status').then(r => r.json()).then(data => {
-            if (data && data.setup_complete === false) {
-                window.location.replace('/setup.html');
-            } else {
-                // If already logged in, go straight to dashboard
-                fetch('/auth/me').then(r => {
-                    if (r.ok) window.location.replace('/index.html');
-                }).catch(() => {});
-            }
+        // If already logged in, go straight to dashboard
+        fetch('/auth/me', { credentials: 'include' }).then(r => {
+            if (r.ok) window.location.replace('/index.html');
         }).catch(() => {});
 
         form.addEventListener('submit', async (e) => {

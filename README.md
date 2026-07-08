@@ -23,8 +23,9 @@ venv\Scripts\activate
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Edit config.py — set your camera's RTSP URL
-#    RTSP_URL = 'rtsp://admin:password@192.168.1.108:554/stream1'
+# 3. Copy .env.example to .env and set your camera's RTSP URL
+cp .env.example .env
+#    Edit .env: RTSP_URL=rtsp://admin:password@192.168.1.108:554/stream1
 
 # 4. Run the application
 python main.py
@@ -35,13 +36,13 @@ python main.py
 
 ## Configuration Guide
 
-All parameters are in `config.py`. Edit this single file to adapt the system to your environment.
+All parameters are in `config.py`. Sensitive values (RTSP_URL, API keys) are loaded from `.env` — see `.env.example` for the full list.
 
 ### Camera Settings
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `RTSP_URL` | `'rtsp://admin:password@192.168.1.108:554/stream1'` | RTSP stream URL of the IP camera. Can also be a local video file path for testing. |
+| `RTSP_URL` | `rtsp://localhost:554/stream` | RTSP stream URL of the IP camera (set in `.env`). Can also be a local video file path for testing. |
 | `FRAME_SKIP` | `3` | Process every Nth frame. Higher = less CPU, lower detection rate. At 3, expect ~8 FPS processing. |
 | `FRAME_WIDTH` | `1280` | Resize captured frame width before processing. |
 | `FRAME_HEIGHT` | `720` | Resize captured frame height before processing. |

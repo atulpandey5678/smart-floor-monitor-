@@ -5,9 +5,9 @@
 
 # Databases
 *.db
+*.db-shm
+*.db-wal
 tracker.db
-*.sqlite
-*.sqlite3
 
 # Logs
 *.log
@@ -19,6 +19,10 @@ __pycache__/
 *$py.class
 .pytest_cache/
 
+# Coverage
+.coverage
+htmlcov/
+
 # IDEs & Editor folders
 .vscode/
 .idea/
@@ -28,8 +32,9 @@ __pycache__/
 scratch/
 tmp/
 temp/
+backups/
 
-# Large Model Files (optional, though yolov8n.pt is small, it's good practice)
+# Large Model Files
 # *.pt
 
 # OS generated files

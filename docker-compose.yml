@@ -1,0 +1,47 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Cologic Shop Floor Tracker — Docker Compose
+# Defines application service with persistent volumes and environment passthrough
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+  tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cologic-tracker
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      # Persistent SQLite database
+      - tracker-data:/app/data
+      # Backup files
+      - tracker-backups:/app/backups
+    environment:
+      # Database path inside the container (mounted volume)
+      - DB_PATH=/app/data/tracker.db
+      # Server configuration
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      # Secrets passed from host environment or .env file
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - FERNET_KEY=${FERNET_KEY:-}
+      - SECRET_KEY=${SECRET_KEY:-}
+      # Camera streams (can be overridden per machine via API)
+      - RTSP_URL=${RTSP_URL:-}
+      # Machine identification
+      - MACHINE_ID=${MACHINE_ID:-M-01}
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  tracker-data:
+    driver: local
+  tracker-backups:
+    driver: local

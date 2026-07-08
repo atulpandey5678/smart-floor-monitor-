@@ -4,11 +4,11 @@ Analyzes a configurable region of interest (ROI) in the camera frame to
 determine the color of a machine's tower/stack indicator light.
 """
 
-import logging
 from collections import deque
 
 import cv2
 import numpy as np
+import structlog
 
 from config import (
     LIGHT_ZONE,
@@ -26,7 +26,7 @@ from config import (
     LIGHT_VIVID_SATURATION,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class LightDetector:

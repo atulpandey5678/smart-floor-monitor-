@@ -5,12 +5,12 @@ Supports two movement detection backends:
 - RMS pixel difference — legacy fallback
 """
 
-import logging
 import time as time_module
 from typing import Optional, Callable
 
 import cv2
 import numpy as np
+import structlog
 
 from config import (
     MOVEMENT_THRESHOLD,
@@ -19,7 +19,7 @@ from config import (
     USE_OPTICAL_FLOW,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class AntiCheatEngine:

@@ -12,11 +12,11 @@ Usage:
 """
 
 import json
-import logging
+import structlog
 import threading
 from typing import Any, Dict, Optional
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # ── Default values (fallback when DB has no entry) ───────────────────
 # These mirror the current config.py values so the system works on a
@@ -88,11 +88,17 @@ class SettingsManager:
     async def _load_all(self):
         """Load all settings from DB into the in-memory cache."""
         try:
-            rows = await self._db.fetch_all("SELECT section, key, value FROM app_settings")
+            result = self._db.fetch_all("SELECT section, key, value FROM app_settings")
+            # Support both async (aiosqlite) and sync (sqlite3) DB implementations
+            import inspect
+            if inspect.isawaitable(result):
+                rows = await result
+            else:
+                rows = result
             with self._lock:
                 self._cache = {}
                 for row in rows:
-                    s, k, v = row["section"], row["key"], row["value"]
+                    s, k, v = row[0], row[1], row[2]
                     if s not in self._cache:
                         self._cache[s] = {}
                     try:
@@ -100,7 +106,7 @@ class SettingsManager:
                     except (json.JSONDecodeError, ValueError):
                         self._cache[s][k] = v
         except Exception as e:
-            logger.warning("Failed to load settings from DB (using defaults): %s", e)
+            logger.warning("Failed to load settings from DB, using defaults", error=str(e))
 
     def get(self, section: str, key: str, default: Any = None) -> Any:
         """Get a single setting value.
@@ -129,15 +135,18 @@ class SettingsManager:
         json_value = json.dumps(value)
         if self._db:
             try:
-                await self._db.execute(
+                import inspect
+                result = self._db.execute(
                     """INSERT INTO app_settings (section, key, value, updated_at)
                        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
                        ON CONFLICT(section, key) DO UPDATE SET value=excluded.value,
                        updated_at=excluded.updated_at""",
                     (section, key, json_value),
                 )
+                if inspect.isawaitable(result):
+                    await result
             except Exception as e:
-                logger.error("Failed to save setting %s/%s: %s", section, key, e)
+                logger.error("Failed to save setting", section=section, key=key, error=str(e))
                 raise
         with self._lock:
             if section not in self._cache:

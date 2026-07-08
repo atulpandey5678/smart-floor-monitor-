@@ -9,14 +9,14 @@ Usage:
                         message='RED light detected')
 """
 
-import logging
+import structlog
 import smtplib
 import threading
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Alert type → human readable label
 _ALERT_LABELS = {

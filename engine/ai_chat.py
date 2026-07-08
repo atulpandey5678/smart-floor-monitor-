@@ -1,13 +1,13 @@
 """AI Chat Engine with Anthropic Tool Calling."""
 
-import logging
+import structlog
 import json
 from datetime import datetime, timedelta
 import anthropic
 
 from config import CLAUDE_API_KEY
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Define the tools Claude can use
 _TOOLS = [

@@ -184,3 +184,115 @@ class TestSnapshot:
         sm = SessionManager()
         snap = sm.process_frame(body_detected=True)
         assert snap['state'] == 'OPENING'
+
+
+class TestMachineIdTagging:
+    """Tests for per-machine session/event tagging (Requirement 3.1, 3.2, 3.3)."""
+
+    def test_machine_id_in_session_opened_event(self):
+        """session_opened events include machine_id when set."""
+        sm = SessionManager(machine_id="M-01")
+        t = datetime(2024, 1, 1, 8, 0, 0)
+        t, snap = _open_session(sm, t)
+        opened = [e for e in snap['events'] if e['type'] == 'session_opened']
+        assert len(opened) == 1
+        assert opened[0]['machine_id'] == "M-01"
+
+    def test_machine_id_in_session_closed_event(self):
+        """session_closed events include machine_id when set."""
+        sm = SessionManager(machine_id="M-02")
+        start = datetime(2024, 1, 1, 8, 0, 0)
+        t, _ = _open_session(sm, start)
+        # Body lost → GRACE
+        _advance(sm, False, t)
+        # Wait past grace period
+        t += timedelta(seconds=GRACE_PERIOD_SECONDS + 1)
+        snap = _advance(sm, False, t)
+        closed = [e for e in snap['events'] if e['type'] == 'session_closed']
+        assert len(closed) == 1
+        assert closed[0]['machine_id'] == "M-02"
+
+    def test_machine_id_in_alert_generated_event(self):
+        """alert_generated events include machine_id when set."""
+        sm = SessionManager(machine_id="M-03")
+        start = datetime(2024, 1, 1, 8, 0, 0)
+        t, _ = _open_session(sm, start)
+        snap = _advance(sm, True, t, badge_static=True)
+        alerts = [e for e in snap['events'] if e['type'] == 'alert_generated']
+        assert len(alerts) == 1
+        assert alerts[0]['machine_id'] == "M-03"
+
+    def test_machine_id_in_snapshot(self):
+        """The frame snapshot includes machine_id when set."""
+        sm = SessionManager(machine_id="M-04")
+        t = datetime(2024, 1, 1, 8, 0, 0)
+        snap = _advance(sm, True, t)
+        assert snap['machine_id'] == "M-04"
+
+    def test_no_machine_id_when_not_set(self):
+        """Events and snapshot omit machine_id when not configured."""
+        sm = SessionManager()
+        t = datetime(2024, 1, 1, 8, 0, 0)
+        snap = _advance(sm, True, t)
+        assert 'machine_id' not in snap
+
+    def test_machine_id_property(self):
+        """The machine_id property returns the configured ID."""
+        sm = SessionManager(machine_id="M-05")
+        assert sm.machine_id == "M-05"
+        sm2 = SessionManager()
+        assert sm2.machine_id is None
+
+
+class TestMultiMachineIsolation:
+    """Tests for independent state transitions across machines (Requirement 3.2)."""
+
+    def test_independent_state_transitions(self):
+        """Two SessionManagers for different machines operate independently."""
+        sm1 = SessionManager(machine_id="M-01")
+        sm2 = SessionManager(machine_id="M-02")
+        t = datetime(2024, 1, 1, 8, 0, 0)
+
+        # Open session on machine 1 only
+        t1, _ = _open_session(sm1, t)
+        assert sm1.state == SessionState.ACTIVE
+        assert sm2.state == SessionState.IDLE
+
+        # Machine 2 starts detection but machine 1 loses body
+        _advance(sm2, True, t)
+        assert sm2.state == SessionState.OPENING
+        _advance(sm1, False, t1)
+        assert sm1.state == SessionState.GRACE
+        assert sm2.state == SessionState.OPENING
+
+    def test_no_cross_machine_event_leakage(self):
+        """Events from one machine don't appear in another's output."""
+        sm1 = SessionManager(machine_id="M-01")
+        sm2 = SessionManager(machine_id="M-02")
+        start = datetime(2024, 1, 1, 8, 0, 0)
+
+        # Open session on machine 1
+        _open_session(sm1, start)
+
+        # Machine 2 processes a frame — should have no events
+        snap2 = _advance(sm2, False, start)
+        assert snap2['events'] == []
+        assert snap2['machine_id'] == "M-02"
+
+    def test_concurrent_sessions_different_machines(self):
+        """Both machines can have active sessions simultaneously."""
+        sm1 = SessionManager(machine_id="M-01")
+        sm2 = SessionManager(machine_id="M-02")
+        start = datetime(2024, 1, 1, 8, 0, 0)
+
+        _open_session(sm1, start)
+        _open_session(sm2, start)
+
+        assert sm1.state == SessionState.ACTIVE
+        assert sm2.state == SessionState.ACTIVE
+
+        # Closing one doesn't affect the other
+        t = start + timedelta(seconds=STABLE_FRAMES_REQUIRED + 1)
+        _advance(sm1, False, t)
+        assert sm1.state == SessionState.GRACE
+        assert sm2.state == SessionState.ACTIVE

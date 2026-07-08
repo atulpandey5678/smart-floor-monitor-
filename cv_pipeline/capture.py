@@ -1,14 +1,14 @@
 # Frame capture module - RTSP stream capture with reconnection
 
-import logging
 import threading
 import time
 
 import cv2
+import structlog
 
 from config import RTSP_URL, FRAME_WIDTH, FRAME_HEIGHT, FRAME_SKIP
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class FrameCapture:
@@ -34,7 +34,7 @@ class FrameCapture:
         self._frame_lock = threading.Lock()
         self._latest_frame = None
 
-        logger.info(f"FrameCapture initialized with URL: {self.rtsp_url}")
+        logger.info("FrameCapture initialized", rtsp_url=self.rtsp_url)
 
     def open(self) -> bool:
         """Open the video capture connection to the RTSP stream.
@@ -44,11 +44,11 @@ class FrameCapture:
         Returns:
             True if the connection was opened successfully, False otherwise.
         """
-        logger.info(f"Opening video capture: {self.rtsp_url}")
+        logger.info("Opening video capture", rtsp_url=self.rtsp_url)
         self._cap = cv2.VideoCapture(self.rtsp_url)
 
         if not self._cap.isOpened():
-            logger.error(f"Failed to connect to RTSP stream: {self.rtsp_url}")
+            logger.error("Failed to connect to RTSP stream", rtsp_url=self.rtsp_url)
             return False
 
         # Set buffer size to 1 for low latency
@@ -59,10 +59,24 @@ class FrameCapture:
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
 
         logger.info(
-            f"Connected to RTSP stream: {self.rtsp_url} "
-            f"(resolution: {FRAME_WIDTH}x{FRAME_HEIGHT})"
+            "Connected to RTSP stream",
+            rtsp_url=self.rtsp_url,
+            resolution=f"{FRAME_WIDTH}x{FRAME_HEIGHT}",
         )
         return True
+
+    def set_url(self, new_url: str) -> None:
+        """Update the RTSP URL dynamically and force a reconnection if changed."""
+        if not new_url or new_url == self.rtsp_url:
+            return
+        
+        logger.info("RTSP URL changing", old_url=self.rtsp_url, new_url=new_url)
+        self.rtsp_url = new_url
+        
+        # Release current capture to force a reconnect on the next loop
+        if self._cap is not None:
+            self._cap.release()
+            self._cap = None
 
     def reconnect(self) -> bool:
         """Attempt to reconnect to the RTSP stream.
@@ -105,8 +119,9 @@ class FrameCapture:
             if self.open():
                 return True
             logger.error(
-                f"Cannot connect to RTSP stream: {self.rtsp_url}. "
-                f"Retrying in 5 seconds..."
+                "Cannot connect to RTSP stream, retrying",
+                rtsp_url=self.rtsp_url,
+                retry_seconds=5,
             )
             time.sleep(5)
 
@@ -160,33 +175,23 @@ class FrameCapture:
             if not self.reconnect():
                 return False, None
 
-        # Grab N-1 frames without decoding (just advance the stream)
-        for _ in range(FRAME_SKIP - 1):
+        skip = max(1, FRAME_SKIP)
+
+        # Grab and discard N-1 frames to advance the stream
+        for _ in range(skip - 1):
             if not self._cap.grab():
                 logger.warning("Failed to grab frame during skip, attempting reconnection")
                 if self.reconnect():
-                    # Retry from the beginning after reconnection
                     return self.read_frame_with_skip()
                 return False, None
 
-        # Retrieve the Nth frame (full decode)
-        success, frame = self._cap.retrieve()
-        if not success:
-            # If retrieve fails after grabs, try a full grab + retrieve
-            if not self._cap.grab():
-                logger.warning("Failed to grab frame for retrieval, attempting reconnection")
-                if self.reconnect():
-                    success, frame = self._cap.read()
-                    if success:
-                        self._frame_count += 1
-                    return success, frame if success else None
-                return False, None
-            success, frame = self._cap.retrieve()
-
+        # Read (grab + retrieve) the Nth frame
+        success, frame = self._cap.read()
+        
         if success:
             self._frame_count += 1
         else:
-            logger.warning("Failed to retrieve frame after skipping, attempting reconnection")
+            logger.warning("Failed to read frame, attempting reconnection")
             if self.reconnect():
                 success, frame = self._cap.read()
                 if success:

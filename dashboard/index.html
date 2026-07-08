@@ -5,15 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cologic — Shop Floor Tracker</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="fonts/fonts.css">
 </head>
 <body>
     <!-- Sidebar -->
     <nav class="sidebar">
         <div class="sidebar-brand">
-            <img src="https://i.ibb.co/q3NXdhnH/Cologic-LOGO-1.png" alt="Cologic" class="brand-logo">
+            <img src="assets/logo.png" alt="Cologic" class="brand-logo">
             <div class="brand-info">
                 <span class="brand-text">Cologic</span>
                 <span class="brand-sub">Shop Floor Tracker</span>
@@ -51,7 +49,7 @@
     <!-- Startup Loading Overlay -->
     <div id="startup-overlay" class="startup-overlay">
         <div class="startup-inner">
-            <img src="https://i.ibb.co/q3NXdhnH/Cologic-LOGO-1.png" alt="Cologic" class="startup-logo">
+            <img src="assets/logo.png" alt="Cologic" class="startup-logo">
             <div class="startup-title">Cologic Shop Floor Tracker</div>
             <div class="startup-msg" id="startup-msg">Starting up…</div>
             <div class="startup-spinner"></div>
@@ -396,18 +394,141 @@
 
         <!-- PAGE: Machines (Live Monitor) -->
         <section class="page" id="page-machines">
-            <div style="display:flex; justify-content:flex-end; padding:16px 24px 0;">
-                <button class="btn btn-accent btn-sm" id="btn-top-setup-camera" onclick="navigateTo('cameras')" style="display:flex; align-items:center; gap:6px;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                    Camera Wizard
-                </button>
+            <div class="machines-page-toolbar">
+                <div class="machines-page-toolbar-left">
+                    <h2 class="machines-page-title">Machine Overview</h2>
+                    <span class="machines-count-badge" id="machines-count-badge">0 machines</span>
+                </div>
+                <div class="machines-page-toolbar-right">
+                    <button class="btn btn-ghost btn-sm" id="btn-refresh-machines">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.1"/></svg>
+                        Refresh
+                    </button>
+                    <button class="btn btn-accent btn-sm" id="btn-top-setup-camera" onclick="window.__navigateTo('cameras')" style="display:flex; align-items:center; gap:6px;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                        Add Machine
+                    </button>
+                </div>
             </div>
             <div class="machines-empty-state" id="machines-empty-state" hidden>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3h-8l-2 4h12z"/></svg>
                 <p>No machines configured yet</p>
                 <button class="btn btn-accent" id="btn-setup-first-machine">Set up your first machine</button>
             </div>
-            <div class="machines-container" id="machines-container"></div>
+            <div class="machines-container" id="machines-container">
+                <div class="machines-grid" id="machines-grid">
+                    <!-- Machine cards rendered dynamically by machine-overview.js -->
+                </div>
+            </div>
+        </section>
+
+        <!-- PAGE: Machine Detail -->
+        <section class="page" id="page-machine-detail">
+            <div class="machine-detail-toolbar">
+                <button class="btn btn-ghost" id="btn-back-to-machines">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                    Back to Machines
+                </button>
+                <h2 class="machine-detail-title" id="machine-detail-title">Machine Detail</h2>
+            </div>
+
+            <!-- Live Status Card -->
+            <div class="machine-detail-status-card" id="machine-detail-status">
+                <div class="md-status-left">
+                    <div class="md-machine-id" id="md-machine-id">—</div>
+                    <span class="md-state-badge state-idle" id="md-state-badge">IDLE</span>
+                </div>
+                <div class="md-status-center">
+                    <div class="md-stat"><span class="md-stat-label">Worker</span><span class="md-stat-value" id="md-worker">—</span></div>
+                    <div class="md-stat"><span class="md-stat-label">Session Duration</span><span class="md-stat-value" id="md-session-dur">—</span></div>
+                    <div class="md-stat"><span class="md-stat-label">Efficiency</span><span class="md-stat-value" id="md-efficiency">—</span></div>
+                </div>
+                <div class="md-status-right">
+                    <div class="md-stat"><span class="md-stat-label">Pipeline</span><span class="md-stat-value" id="md-pipeline-status">—</span></div>
+                    <div class="md-stat"><span class="md-stat-label">Light</span><span class="md-stat-value" id="md-light-status">—</span></div>
+                </div>
+            </div>
+
+            <div class="machine-detail-panels">
+                <!-- Session Timeline (Today) -->
+                <div class="panel md-panel-timeline">
+                    <div class="panel-header">
+                        <span class="panel-title">Session Timeline</span>
+                        <span class="panel-subtitle" id="md-timeline-date">Today</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="md-timeline" id="md-timeline"></div>
+                        <div class="empty-state" id="md-timeline-empty">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            <p>No sessions today</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alert Panel -->
+                <div class="panel md-panel-alerts">
+                    <div class="panel-header">
+                        <span class="panel-title">Recent Alerts</span>
+                        <span class="panel-badge" id="md-alerts-count">0</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="md-alerts-list" id="md-alerts-list"></div>
+                        <div class="empty-state" id="md-alerts-empty">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            <p>No alerts for this machine</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Machine Config Summary -->
+                <div class="panel md-panel-config">
+                    <div class="panel-header">
+                        <span class="panel-title">Configuration</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="md-config-summary" id="md-config-summary">
+                            <div class="md-config-row"><span class="md-cfg-label">Display Name</span><span class="md-cfg-value" id="md-cfg-name">—</span></div>
+                            <div class="md-config-row"><span class="md-cfg-label">RTSP URL</span><span class="md-cfg-value" id="md-cfg-rtsp">—</span></div>
+                            <div class="md-config-row"><span class="md-cfg-label">Confidence</span><span class="md-cfg-value" id="md-cfg-confidence">—</span></div>
+                            <div class="md-config-row"><span class="md-cfg-label">Status</span><span class="md-cfg-value" id="md-cfg-status">—</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Session History with Pagination -->
+            <div class="panel md-panel-history">
+                <div class="panel-header">
+                    <span class="panel-title">Session History</span>
+                    <div class="md-history-filters">
+                        <input type="date" id="md-history-start" class="date-input" placeholder="Start date">
+                        <input type="date" id="md-history-end" class="date-input" placeholder="End date">
+                        <button class="btn btn-accent btn-sm" id="btn-md-filter-sessions">Filter</button>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <table class="data-table" id="md-sessions-table">
+                        <thead>
+                            <tr>
+                                <th>Employee</th>
+                                <th>Start</th>
+                                <th>End</th>
+                                <th>Duration</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="md-sessions-body"></tbody>
+                    </table>
+                    <div class="empty-state" id="md-sessions-empty">
+                        <p>No session history found</p>
+                    </div>
+                    <div class="md-pagination" id="md-pagination">
+                        <button class="btn btn-ghost btn-sm" id="md-page-prev" disabled>← Prev</button>
+                        <span class="md-page-info" id="md-page-info">Page 1</span>
+                        <button class="btn btn-ghost btn-sm" id="md-page-next" disabled>Next →</button>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- PAGE: Sessions -->
@@ -603,6 +724,10 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.1"/></svg>
                         Data Retention
                     </div>
+                    <div class="settings-tab-item" data-tab="system">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                        System & Camera
+                    </div>
                     <div class="settings-tab-item" data-tab="users" id="settings-users-tab">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                         Admin Users
@@ -617,6 +742,22 @@
                 <div class="settings-content">
                     <div id="settings-save-banner" class="settings-save-banner" hidden>
                         Settings saved successfully.
+                    </div>
+
+                    <!-- System Tab -->
+                    <div class="settings-panel" id="settings-tab-system">
+                        <h2 class="settings-section-title">System & Camera</h2>
+                        <p class="settings-section-desc">Manage camera connection and low-level system settings. Changes to the camera URL will reconnect the backend automatically.</p>
+                        <div class="settings-grid">
+                            <div class="settings-field">
+                                <label>Camera RTSP URL</label>
+                                <span class="settings-hint">The RTSP address of the live camera feed</span>
+                                <input type="text" id="s-camera-url" class="input-field settings-input" placeholder="rtsp://admin:123456@192.168.0.150:554/Streaming/Channels/101">
+                            </div>
+                        </div>
+                        <div class="form-actions" style="margin-top:20px;">
+                            <button class="btn btn-primary btn-save-settings" data-section="system">Save System Settings</button>
+                        </div>
                     </div>
 
                     <!-- Detection Tab -->
@@ -1001,9 +1142,9 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js"></script>
+    <script src="vendor/chart.min.js"></script>
+    <script src="vendor/html2canvas.min.js"></script>
+    <script src="vendor/jspdf.umd.min.js"></script>
+    <script type="module" src="modules/main.js"></script>
 </body>
 </html>

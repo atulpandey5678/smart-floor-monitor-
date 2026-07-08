@@ -1,0 +1,53 @@
+# ── Secrets and environment files ────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Database files ───────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+tracker.db
+
+# ── Logs ─────────────────────────────────────────────────
+*.log
+app.log
+
+# ── Python artifacts ─────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# ── IDE and editor ───────────────────────────────────────
+.vscode/
+.idea/
+.kiro/
+
+# ── Version control ──────────────────────────────────────
+.git/
+.gitignore
+
+# ── Temporary and scratch ────────────────────────────────
+scratch/
+tmp/
+temp/
+backups/
+
+# ── OS generated ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Tests (not needed in production image) ───────────────
+tests/
+
+# ── Docker files (avoid recursive build context) ─────────
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# ── Model file (downloaded during build stage) ───────────
+yolov8n.pt

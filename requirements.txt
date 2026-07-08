@@ -1,3 +1,39 @@
-# Dependencies placeholder
-anthropic>=0.30.0
-python-dotenv>=1.0.1
+# Cologic Shop Floor Tracker - Pinned Production Dependencies
+# Python >=3.10 required
+
+# Web framework and server
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.12
+
+# Computer vision and ML
+ultralytics==8.3.50
+opencv-python-headless==4.10.0.84
+numpy==2.1.3
+torch==2.5.1
+torchvision==0.20.1
+
+# Data validation and models
+pydantic==2.10.3
+
+# Database
+aiosqlite==0.20.0
+
+# Scheduling
+apscheduler==3.10.4
+
+# Authentication
+bcrypt==4.2.1
+
+# Configuration
+python-dotenv==1.0.1
+
+# AI integration
+anthropic==0.39.0
+
+# Encryption
+cryptography==42.0.5
+
+# Observability and production hardening
+structlog==24.4.0
+slowapi==0.1.9

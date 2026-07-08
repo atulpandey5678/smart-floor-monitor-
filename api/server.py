@@ -2,23 +2,32 @@
 
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from main import scheduled_backup, scheduled_report
 
-import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+import structlog
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from config import API_HOST, API_PORT, DB_PATH
 from db.database import Database, init_db
+from db.async_database import init_async_db, close_async_db
 from db.repository import Repository
+from engine.shutdown import get_shutdown_handler
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
+
+# ── Rate Limiting ─────────────────────────────────────────────
+# Global rate limit: 100 requests/minute per client IP (Requirement 9.1)
+# Returns HTTP 429 with Retry-After header when exceeded (Requirement 9.4)
+limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 
 # Global instances (set during startup)
 db = None
@@ -28,8 +37,42 @@ _fastapi_loop = None
 _scheduler = None
 
 # Routes that do NOT require authentication
-_AUTH_EXEMPT_PREFIXES = ("/auth/", "/ws", "/api/video_feed", "/api/stream", "/api/setup/")
+_AUTH_EXEMPT_PREFIXES = ("/auth/", "/ws", "/api/video_feed", "/api/stream", "/api/setup/",
+                         "/api/v1/video_feed", "/api/v1/stream", "/api/v1/setup/",
+                         "/health")
 _STATIC_EXTENSIONS = (".html", ".css", ".js", ".ico", ".png", ".jpg", ".svg", ".woff", ".woff2", ".ttf")
+
+
+class CSRFMiddleware(BaseHTTPMiddleware):
+    """Enforce CSRF double-submit cookie pattern on state-changing requests.
+
+    Checks X-CSRF-Token header against csrf_token cookie for
+    POST/PUT/DELETE requests on /api/* paths.
+
+    Exempt: /auth/login, /auth/logout (no CSRF cookie yet on login).
+    """
+
+    _CSRF_EXEMPT_PATHS = ("/auth/login", "/auth/logout")
+    _STATE_CHANGING_METHODS = ("POST", "PUT", "DELETE", "PATCH")
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        method = request.method
+
+        # Only check state-changing methods on API paths
+        if method in self._STATE_CHANGING_METHODS and path.startswith("/api"):
+            # Skip exempt paths
+            if not any(path.endswith(p) for p in self._CSRF_EXEMPT_PATHS):
+                from api.auth import verify_csrf_token
+                try:
+                    verify_csrf_token(request)
+                except HTTPException as e:
+                    return JSONResponse(
+                        status_code=e.status_code,
+                        content={"detail": e.detail},
+                    )
+
+        return await call_next(request)
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -72,14 +115,49 @@ async def lifespan(app: FastAPI):
 
     # Startup
     logger.info("Starting Cologic Shop Floor Tracker API...")
-    db = await init_db()
-    repo = Repository(db)
+
+    # Run database migrations before anything else
+    from db.migrations import MigrationRunner, MigrationError
+
+    runner = MigrationRunner(DB_PATH)
+    try:
+        applied = runner.run()
+        if applied:
+            logger.info("Applied %d migration(s)", len(applied))
+    except MigrationError as e:
+        logger.critical("Migration failed: %s — aborting startup", e)
+        raise
+    finally:
+        runner.close()
+
+    db = init_db()  # synchronous — still needed for auth + settings_manager
+    async_db = await init_async_db(DB_PATH)
+    repo = Repository(async_db)  # Repository now uses async DB
     set_routes_repo(repo)
-    logger.info(f"Database initialized at {DB_PATH}")
+    logger.info(f"Database initialized at {DB_PATH} (sync + async)")
+
+    # Provide async DB to health check endpoints
+    # Also wire in orchestrator if available (set in engine/__init__.py by main.py)
+    from engine import get_orchestrator as _get_orch
+    _orch = _get_orch()
+    set_health_dependencies(pipeline_orchestrator=_orch, async_db=async_db)
 
     # Register DB with auth module
-    from api.auth import set_auth_db
+    from api.auth import set_auth_db, _hash_password
     set_auth_db(db)
+
+    # Seed default admin user if no users exist (fixed credentials: cologic / cologic2026)
+    try:
+        row = db.fetch_one("SELECT COUNT(*) as cnt FROM users")
+        if row and row["cnt"] == 0:
+            pwd_hash = _hash_password("cologic2026")
+            db.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+                ("cologic", pwd_hash, "admin"),
+            )
+            logger.info("Default admin user 'cologic' created")
+    except Exception as e:
+        logger.warning("Failed to seed default user (non-fatal): %s", e)
 
     # Initialize settings manager
     from engine.settings_manager import init_settings
@@ -87,22 +165,34 @@ async def lifespan(app: FastAPI):
     logger.info("Settings manager initialized")
 
     # Start WebSocket broadcast background task
-    from api.websocket import broadcast_loop
+    from api.websocket import broadcast_loop, ws_manager
     _broadcast_task = asyncio.create_task(broadcast_loop())
     logger.info("WebSocket broadcast loop started")
 
+    # Register components with graceful shutdown handler (Req 22.1, 22.2, 22.3)
+    shutdown_handler = get_shutdown_handler()
+    shutdown_handler.set_ws_manager(ws_manager)
+    shutdown_handler.set_async_db(async_db)
+    # Register orchestrator if available (may already be set from main.py)
+    if _orch is not None:
+        shutdown_handler.set_orchestrator(_orch)
+
     global _scheduler
     _scheduler = AsyncIOScheduler()
-    _scheduler.add_job(scheduled_backup, 'interval', hours=24)
-    _scheduler.add_job(scheduled_report, 'interval', minutes=1)
+
+    # Schedule data retention cleanup (Requirement 12.1)
+    from engine.data_retention import schedule_retention_job
+    schedule_retention_job(_scheduler, repo)
+
     _scheduler.start()
-    logger.info("APScheduler started (backup/report jobs scheduled)")
+    logger.info("APScheduler started")
 
 
     yield
 
-    # Shutdown
+    # Shutdown — execute graceful shutdown sequence (Req 22.1, 22.2, 22.3, 22.4)
     logger.info("Shutting down...")
+
     if _broadcast_task:
         _broadcast_task.cancel()
         try:
@@ -113,8 +203,13 @@ async def lifespan(app: FastAPI):
     if _scheduler:
         _scheduler.shutdown()
 
+    # Execute the coordinated shutdown (notifications, pipeline stop, DB close)
+    shutdown_handler = get_shutdown_handler()
+    await shutdown_handler.execute()
+
+    # Close sync DB if still open (fallback — shutdown handler closes async)
     if db:
-        await db.close()
+        db.close()
 
 
 app = FastAPI(
@@ -122,6 +217,35 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+# Attach rate limiter to app state and register 429 handler
+app.state.limiter = limiter
+
+
+def _custom_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """Return HTTP 429 with Retry-After header (Requirement 9.4)."""
+    # Extract retry-after seconds from the rate limit window (default 60s for per-minute)
+    retry_after = 60  # seconds remaining in the current window
+    try:
+        # Try to get actual window reset from limiter
+        if hasattr(request.state, "view_rate_limit") and request.state.view_rate_limit:
+            window_stats = limiter.limiter.get_window_stats(
+                request.state.view_rate_limit[0], *request.state.view_rate_limit[1]
+            )
+            import time
+            retry_after = max(1, int(window_stats[0] - time.time()))
+    except Exception:
+        pass  # Fall back to default 60 seconds
+
+    response = JSONResponse(
+        status_code=429,
+        content={"error": f"Rate limit exceeded: {exc.detail}"},
+        headers={"Retry-After": str(retry_after)},
+    )
+    return response
+
+
+app.add_exception_handler(RateLimitExceeded, _custom_rate_limit_handler)
 
 # CORS (localhost development only — auth cookie handles real security)
 app.add_middleware(
@@ -135,12 +259,30 @@ app.add_middleware(
 # Auth middleware (must come after CORS)
 app.add_middleware(AuthMiddleware)
 
+# CSRF middleware for state-changing API requests
+app.add_middleware(CSRFMiddleware)
+
 # Import and include routes
 from api.routes import router, set_repo as set_routes_repo  # noqa: E402
 from api.auth import auth_router  # noqa: E402
+from api.routes_machines import router as machines_router  # noqa: E402
+from api.health import router as health_router, set_health_dependencies  # noqa: E402
 
-app.include_router(router)
+# Mount main routes at both /api (backward-compatible) and /api/v1 (versioned)
+# Requirement 20.1: All REST endpoints available at /api/v1/
+# Requirement 20.4: /api/ remains as alias for backward compatibility
+app.include_router(router, prefix="/api")
+app.include_router(router, prefix="/api/v1")
+
+# Mount machine routes at both /api/v1 and /api for consistency
+app.include_router(machines_router, prefix="/api/v1")
+app.include_router(machines_router, prefix="/api")
+
 app.include_router(auth_router)
+
+# Mount health check at root level (unauthenticated, no /api prefix)
+# Requirement 14.1, 14.2, 14.3, 14.4
+app.include_router(health_router)
 
 # Import and include WebSocket
 from api.websocket import websocket_endpoint  # noqa: E402

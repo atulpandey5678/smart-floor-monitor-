@@ -2,7 +2,7 @@
 
 import csv
 import io
-import logging
+import structlog
 from dataclasses import dataclass, field, asdict
 from datetime import date, timedelta
 from typing import Dict, List
@@ -11,7 +11,7 @@ import anthropic
 
 from db.repository import Repository
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # ── Data Models ────────────────────────────────────────────────

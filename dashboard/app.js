@@ -334,6 +334,9 @@ function handleWsMessage(data) {
             // Trigger sound for high priority alerts (machine_red_light)
             if (data.alert_type === 'machine_red_light' || data.alert_type === 'camera_offline') {
                 playAlertSound();
+                toast(data.message || 'Critical machine alert!', 'error');
+            } else {
+                toast(data.message || 'New alert received', 'info');
             }
         }
     }
@@ -492,10 +495,31 @@ async function loadMachinesPage() {
     const container = document.getElementById('machines-container');
     if (container) container.innerHTML = Array(2).fill('<div class="machine-card skeleton" style="height:200px;border-radius:12px;"></div>').join('');
     try {
-        const machines = await api('/api/machines');
-        renderMachineCards(machines);
+        // Fetch saved machine configs + live telemetry in parallel
+        const [machines, liveState] = await Promise.all([
+            api('/api/machines').catch(() => []),
+            api('/api/status').catch(() => ({})),
+        ]);
+
+        // If no saved machines, show the live machine from config as fallback
+        let list = machines;
+        if (!list || !list.length) {
+            list = [{ machine_id: liveState.machine_id || 'M-01', state: 'IDLE' }];
+        }
+
+        // Merge live state fields into each matching machine card
+        list = list.map(m => {
+            const mid = m.machine_id || m.id || m.machineName || m.name || 'M-01';
+            if (mid === (liveState.machine_id || 'M-01')) {
+                return Object.assign({}, m, liveState, { machine_id: mid });
+            }
+            return Object.assign({ machine_id: mid }, m);
+        });
+
+        renderMachineCards(list);
     } catch (e) { console.error('loadMachinesPage', e); }
 }
+
 
 function renderMachineCards(machines) {
     const container = document.getElementById('machines-container');
@@ -522,7 +546,7 @@ function renderMachineCards(machines) {
                 </div>
             </div>
             <div class="mc-feed-wrap">
-                <img src="/api/video_feed" class="mc-feed" alt="Live feed">
+                <img src="/api/stream" class="mc-feed" alt="Live feed">
                 <div class="mc-feed-overlay"><span class="mc-status-dot ${sc}"></span></div>
             </div>
             <div class="mc-footer">
@@ -547,6 +571,23 @@ function updateMachineCardsFromWs(data) {
     if (worker) worker.textContent = data.employee_name || (data.badge_id ? 'Badge: '+data.badge_id : 'No worker');
     const dur = card.querySelector('.mc-duration');
     if (dur) dur.textContent = data.active_duration_seconds ? formatDuration(data.active_duration_seconds) : '—';
+    
+    // Dynamically update light status badge
+    let lightBadge = card.querySelector('.mc-light');
+    const lightStatus = data.machine_light_status || data.light_color;
+    if (lightStatus) {
+        if (!lightBadge) {
+            const titleRow = card.querySelector('.mc-title-row');
+            if (titleRow) {
+                titleRow.insertAdjacentHTML('beforeend', `<span class="mc-light light-${lightStatus.toLowerCase()}">${escHtml(lightStatus)}</span>`);
+                lightBadge = card.querySelector('.mc-light');
+            }
+        }
+        if (lightBadge) {
+            lightBadge.className = 'mc-light light-' + lightStatus.toLowerCase();
+            lightBadge.textContent = lightStatus;
+        }
+    }
 }
 
 /* ── 13. SESSIONS PAGE ─────────────────────────────────────── */
@@ -908,6 +949,10 @@ async function loadSettingsData() {
         const all = await api('/api/settings');
         App.settingsCache = all;
 
+        // System
+        const sys = all.system || {};
+        setInputVal('s-camera-url', sys.camera_url);
+
         // Detection
         const d = all.detection || {};
         setInputVal('s-person-conf', d.person_confidence_threshold);
@@ -1009,7 +1054,11 @@ window.saveSettings = async function(section) {
     const banner = document.getElementById('settings-save-banner');
     let payload = {};
 
-    if (section === 'detection') {
+    if (section === 'system') {
+        payload = {
+            camera_url: document.getElementById('s-camera-url')?.value,
+        };
+    } else if (section === 'detection') {
         payload = {
             person_confidence_threshold: parseFloat(document.getElementById('s-person-conf')?.value || 0.6),
             grace_period_seconds: parseInt(document.getElementById('s-grace')?.value || 180),

@@ -11,14 +11,14 @@ Pure logic class with injectable time for testability.
 No I/O dependencies — the caller handles persistence and alerting.
 """
 
-import logging
+import structlog
 from datetime import datetime
 from typing import Optional, List, Callable
 
 from engine.models import SessionState, LiveStatus
 from config import STABLE_FRAMES_REQUIRED, GRACE_PERIOD_SECONDS
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Constant badge identifier used to satisfy the DB schema (sessions.badge_id
 # is NOT NULL). The system is presence-based and does not read badges.
@@ -32,14 +32,18 @@ class SessionManager:
     No I/O dependencies — the caller handles persistence and alerting.
     """
 
-    def __init__(self, clock: Callable[[], datetime] = None):
+    def __init__(self, clock: Callable[[], datetime] = None, machine_id: Optional[str] = None):
         """Initialize the session manager.
 
         Args:
             clock: Optional callable that returns current datetime.
                    Defaults to datetime.now() if not provided.
+            machine_id: Optional machine identifier. When set, all emitted
+                        events (session_opened, session_closed, alert_generated)
+                        are tagged with this machine_id for multi-machine isolation.
         """
         self._clock = clock or datetime.now
+        self._machine_id = machine_id
         self._state = SessionState.IDLE
         self._current_badge_id: Optional[str] = None
         self._session_start: Optional[datetime] = None
@@ -48,6 +52,10 @@ class SessionManager:
         self._grace_start: Optional[datetime] = None
         self._last_frame_time: Optional[datetime] = None
         self._events: List[dict] = []  # accumulated events for caller
+
+    @property
+    def machine_id(self) -> Optional[str]:
+        return self._machine_id
 
     @property
     def state(self) -> SessionState:
@@ -101,7 +109,7 @@ class SessionManager:
             self._handle_abandoned(body_detected, badge_static, now)
 
         # Build snapshot for broadcasting
-        return {
+        snapshot = {
             'state': self._state.value,
             'badge_id': self._current_badge_id or WORKER_BADGE_ID,
             'active_duration_seconds': self._active_duration,
@@ -110,6 +118,9 @@ class SessionManager:
             'session_start': self._session_start.isoformat() if self._session_start else None,
             'events': self._events,
         }
+        if self._machine_id is not None:
+            snapshot['machine_id'] = self._machine_id
+        return snapshot
 
     def _handle_idle(self, body_detected: bool, now: datetime):
         """IDLE: Waiting for a person to appear."""
@@ -136,11 +147,14 @@ class SessionManager:
             self._state = SessionState.ACTIVE
             self._session_start = now
             self._active_duration = 0.0
-            self._events.append({
+            event = {
                 'type': 'session_opened',
                 'badge_id': WORKER_BADGE_ID,
                 'start_time': now,
-            })
+            }
+            if self._machine_id is not None:
+                event['machine_id'] = self._machine_id
+            self._events.append(event)
             logger.info(
                 f"OPENING -> ACTIVE: body stable for "
                 f"{STABLE_FRAMES_REQUIRED} frames"
@@ -152,13 +166,16 @@ class SessionManager:
         # Anti-cheat: present but no movement past timeout → ABANDONED
         if badge_static:
             self._state = SessionState.ABANDONED
-            self._events.append({
+            event = {
                 'type': 'alert_generated',
                 'badge_id': self._current_badge_id or WORKER_BADGE_ID,
                 'alert_type': 'static_worker',
                 'message': 'Worker present but no movement detected',
                 'timestamp': now,
-            })
+            }
+            if self._machine_id is not None:
+                event['machine_id'] = self._machine_id
+            self._events.append(event)
             logger.warning("ACTIVE -> ABANDONED: no movement detected")
             return
 
@@ -203,14 +220,17 @@ class SessionManager:
 
     def _close_session(self, now: datetime, reason: str):
         """Close the current session and emit a session_closed event."""
-        self._events.append({
+        event = {
             'type': 'session_closed',
             'badge_id': self._current_badge_id or WORKER_BADGE_ID,
             'start_time': self._session_start,
             'end_time': now,
             'active_duration_seconds': self._active_duration,
             'close_reason': reason,
-        })
+        }
+        if self._machine_id is not None:
+            event['machine_id'] = self._machine_id
+        self._events.append(event)
         logger.info(
             f"Session closed: duration={self._active_duration:.1f}s, reason={reason}"
         )
