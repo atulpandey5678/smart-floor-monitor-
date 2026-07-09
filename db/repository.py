@@ -6,13 +6,44 @@ via duck typing, supporting both the synchronous Database and AsyncDatabase.
 """
 
 import structlog
+from dataclasses import dataclass
 from datetime import datetime, date, timedelta
-from typing import Optional, List, Union
+from typing import Optional, List, TYPE_CHECKING, Union
 
 from db.database import Database
 from db.async_database import AsyncDatabase
 
+if TYPE_CHECKING:  # avoid a runtime db->api layering import; only needed for hints
+    from api.ingest_schemas import AlertMsg, MachineEventMsg, SessionRecordMsg
+
 logger = structlog.get_logger(__name__)
+
+# The system is presence-based and does not scan badges, but sessions.badge_id
+# is NOT NULL with a FK to employees. Ingested sessions/alerts are tagged with
+# this sentinel badge, mirroring engine.session_manager.WORKER_BADGE_ID.
+INGEST_WORKER_BADGE_ID = "WORKER"
+
+
+@dataclass(frozen=True)
+class IngestResult:
+    """Outcome of an idempotent ingest write.
+
+    ``created`` is True when this call persisted a new record (or applied an
+    upsert to an existing session), and False when the Event_ID had already been
+    persisted and the request was treated as an idempotent no-op. In both cases
+    ``event_id`` echoes the accepted Event_ID so the endpoint can return HTTP 200.
+    """
+
+    event_id: str
+    created: bool
+
+    @property
+    def already_persisted(self) -> bool:
+        return not self.created
+
+    @property
+    def status(self) -> str:
+        return "created" if self.created else "already_persisted"
 
 
 class Repository:
@@ -356,7 +387,8 @@ class Repository:
 
             where_clause = " AND ".join(conditions) if conditions else "1=1"
             query = f"""SELECT a.id, a.badge_id, a.machine_id, a.alert_type, a.message,
-                          a.resolved, a.root_cause, a.created_at, e.name as employee_name
+                          a.resolved, a.root_cause, a.created_at, a.event_image_url,
+                          e.name as employee_name
                    FROM alerts a
                    LEFT JOIN employees e ON a.badge_id = e.badge_id
                    WHERE {where_clause}
@@ -417,7 +449,8 @@ class Repository:
         """Get all alerts (resolved + unresolved) ordered by most recent, with pagination."""
         try:
             rows = await self.db.fetch_all(
-                """SELECT id, badge_id, alert_type, message, resolved, root_cause, created_at
+                """SELECT id, badge_id, machine_id, alert_type, message, resolved,
+                          root_cause, created_at, event_image_url
                    FROM alerts
                    ORDER BY created_at DESC
                    LIMIT ? OFFSET ?""",
@@ -482,4 +515,182 @@ class Repository:
             return self._rows_to_dicts(rows)
         except Exception as e:
             logger.error("Failed to get machine state events for %s: %s", machine_id, e)
+            raise
+
+    # ── Idempotent Ingest (Edge → Cloud) ───────────────────────
+
+    async def event_exists(self, event_id: str) -> bool:
+        """Return True if an Event_ID has already been persisted (any kind)."""
+        try:
+            row = await self.db.fetch_one(
+                "SELECT 1 FROM ingested_events WHERE event_id = ? LIMIT 1",
+                (event_id,),
+            )
+            return row is not None
+        except Exception as e:
+            logger.error("Failed to check event existence for %s: %s", event_id, e)
+            raise
+
+    async def _claim_event(self, conn, event_id: str, machine_id: str, kind: str, produced_at: str) -> bool:
+        """Insert into the idempotency ledger inside an open transaction.
+
+        Returns True if this Event_ID was newly claimed (0 → 1 row inserted), or
+        False if it was already present (ON CONFLICT DO NOTHING → 0 rows). Must be
+        called on the connection yielded by ``AsyncDatabase.transaction()``.
+        """
+        cursor = await conn.execute(
+            """INSERT INTO ingested_events (event_id, machine_id, kind, produced_at)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(event_id) DO NOTHING""",
+            (event_id, machine_id, kind, produced_at),
+        )
+        return cursor.rowcount == 1
+
+    async def ingest_session(self, msg: "SessionRecordMsg") -> IngestResult:
+        """Idempotently persist a Session_Record push (open/update/close).
+
+        Idempotent by ``event_id`` (via the ingested_events ledger) and upserted
+        by ``session_uuid`` so open/update/close pushes for one session collapse
+        into a single row. A ``close`` push with no matching existing session
+        creates a new row marked CLOSED (orphan close, Requirement 5.7). Every row
+        is tagged with the originating machine ID (Requirements 2.7, 16.2). The
+        ledger claim and the domain upsert commit atomically; on duplicate the
+        existing record is left untouched (Requirements 5.1, 5.6).
+        """
+        try:
+            is_close = msg.op == "close"
+            state = "CLOSED" if is_close else "ACTIVE"
+            end_time = msg.end_time.isoformat() if msg.end_time else None
+            close_reason = msg.close_reason if is_close else None
+
+            async with self.db.transaction() as conn:
+                claimed = await self._claim_event(
+                    conn, msg.event_id, msg.machine_id, "session", msg.produced_at.isoformat()
+                )
+                if not claimed:
+                    logger.info("Duplicate session event %s ignored", msg.event_id)
+                    return IngestResult(event_id=msg.event_id, created=False)
+
+                # Satisfy the NOT NULL + FK on sessions.badge_id (presence-based).
+                await conn.execute(
+                    "INSERT OR IGNORE INTO employees (badge_id, name) VALUES (?, ?)",
+                    (INGEST_WORKER_BADGE_ID, "Worker"),
+                )
+
+                # Upsert the session identified by session_uuid.
+                await conn.execute(
+                    """INSERT INTO sessions
+                           (badge_id, machine_id, start_time, end_time,
+                            active_duration_seconds, state, close_reason,
+                            event_id, session_uuid)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(session_uuid) DO UPDATE SET
+                           machine_id = excluded.machine_id,
+                           start_time = excluded.start_time,
+                           end_time = excluded.end_time,
+                           active_duration_seconds = excluded.active_duration_seconds,
+                           state = excluded.state,
+                           close_reason = excluded.close_reason,
+                           event_id = excluded.event_id""",
+                    (
+                        INGEST_WORKER_BADGE_ID,
+                        msg.machine_id,
+                        msg.start_time.isoformat(),
+                        end_time,
+                        msg.active_duration_seconds,
+                        state,
+                        close_reason,
+                        msg.event_id,
+                        msg.session_uuid,
+                    ),
+                )
+
+            logger.info(
+                "Ingested session event %s (uuid=%s, op=%s, machine=%s)",
+                msg.event_id, msg.session_uuid, msg.op, msg.machine_id,
+            )
+            return IngestResult(event_id=msg.event_id, created=True)
+        except Exception as e:
+            logger.error("Failed to ingest session %s: %s", msg.event_id, e)
+            raise
+
+    async def ingest_alert(self, msg: "AlertMsg", image_url: str) -> IngestResult:
+        """Idempotently persist an Alert push, storing the Event_Image URL.
+
+        Idempotent by ``event_id``: on a duplicate, no new alert row is created
+        and the existing record is left unchanged (Requirements 5.1, 5.6). The
+        alert is tagged with the originating machine ID (Requirements 2.7, 16.2).
+        The caller uploads the image to the Object_Store and passes the resulting
+        URL, which is stored on the alert row in the same transaction.
+        """
+        try:
+            async with self.db.transaction() as conn:
+                claimed = await self._claim_event(
+                    conn, msg.event_id, msg.machine_id, "alert", msg.produced_at.isoformat()
+                )
+                if not claimed:
+                    logger.info("Duplicate alert event %s ignored", msg.event_id)
+                    return IngestResult(event_id=msg.event_id, created=False)
+
+                await conn.execute(
+                    """INSERT INTO alerts
+                           (badge_id, alert_type, message, machine_id,
+                            event_id, event_image_url, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        INGEST_WORKER_BADGE_ID,
+                        msg.alert_type,
+                        msg.message,
+                        msg.machine_id,
+                        msg.event_id,
+                        image_url,
+                        msg.produced_at.isoformat(),
+                    ),
+                )
+
+            logger.info(
+                "Ingested alert event %s (type=%s, machine=%s)",
+                msg.event_id, msg.alert_type, msg.machine_id,
+            )
+            return IngestResult(event_id=msg.event_id, created=True)
+        except Exception as e:
+            logger.error("Failed to ingest alert %s: %s", msg.event_id, e)
+            raise
+
+    async def ingest_machine_event(self, msg: "MachineEventMsg") -> IngestResult:
+        """Idempotently persist a Machine_Event (tower-light transition).
+
+        Idempotent by ``event_id``; on a duplicate no new row is created and
+        existing data is untouched (Requirements 5.1, 5.6). Tagged with the
+        originating machine ID (Requirements 2.7, 16.2).
+        """
+        try:
+            async with self.db.transaction() as conn:
+                claimed = await self._claim_event(
+                    conn, msg.event_id, msg.machine_id, "machine_event", msg.produced_at.isoformat()
+                )
+                if not claimed:
+                    logger.info("Duplicate machine event %s ignored", msg.event_id)
+                    return IngestResult(event_id=msg.event_id, created=False)
+
+                await conn.execute(
+                    """INSERT INTO machine_state_events
+                           (machine_id, previous_status, new_status, timestamp, event_id)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        msg.machine_id,
+                        msg.previous_status,
+                        msg.new_status,
+                        msg.produced_at.isoformat(),
+                        msg.event_id,
+                    ),
+                )
+
+            logger.info(
+                "Ingested machine event %s (%s: %s → %s)",
+                msg.event_id, msg.machine_id, msg.previous_status, msg.new_status,
+            )
+            return IngestResult(event_id=msg.event_id, created=True)
+        except Exception as e:
+            logger.error("Failed to ingest machine event %s: %s", msg.event_id, e)
             raise

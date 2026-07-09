@@ -1,0 +1,75 @@
+[Unit]
+# Cologic Shop Floor Tracker — Edge_Agent (Linux systemd unit)
+#
+# Runs the on-site Edge_Agent (python -m edge.agent) as a resilient
+# background service. Satisfies:
+#   - Req 12.1: starts automatically on boot (WantedBy=multi-user.target)
+#   - Req 12.2: restarts automatically on unexpected termination
+#               (Restart=on-failure + RestartSec)
+#   - Req 14.1: installable on a Linux on-site machine
+#
+# Install:
+#   sudo cp deploy/edge/cologic-edge-agent.service /etc/systemd/system/
+#   (edit User/WorkingDirectory/EnvironmentFile paths to match your install)
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now cologic-edge-agent.service
+#
+# See deploy/edge/README.md for full instructions.
+
+Description=Cologic Shop Floor Tracker - Edge Agent (CV compute + durable push)
+Documentation=file:///opt/cologic-edge/deploy/edge/README.md
+# Wait for the network so RTSP cameras and the Cloud_Server are reachable.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# --- Identity ---------------------------------------------------------------
+# Run as an unprivileged service account, NOT root. Create it once with:
+#   sudo useradd --system --no-create-home --shell /usr/sbin/nologin cologic
+User=cologic
+Group=cologic
+
+# --- Working directory ------------------------------------------------------
+# The checked-out project root. camera_config.json (Local_Camera_Config) and
+# relative DB paths resolve from here.
+WorkingDirectory=/opt/cologic-edge
+
+# --- Environment ------------------------------------------------------------
+# Secrets and connection settings come from a git-excluded .env file
+# (INGEST_API_KEY, CLOUD_SERVER_BASE_URL, CAMERA_CONFIG_PATH, FERNET_KEY, ...).
+# systemd requires each secret be readable only by the service account:
+#   sudo chown cologic:cologic /opt/cologic-edge/.env
+#   sudo chmod 600 /opt/cologic-edge/.env
+EnvironmentFile=/opt/cologic-edge/.env
+
+# --- Command ----------------------------------------------------------------
+# Use the project's virtualenv interpreter so dependencies resolve. Adjust the
+# path if you install to a different venv location.
+ExecStart=/opt/cologic-edge/.venv/bin/python -m edge.agent
+
+# --- Restart policy (Req 12.2) ----------------------------------------------
+# on-failure restarts the agent whenever it exits non-zero, is killed by a
+# signal, or times out — i.e. any *unexpected* termination. A clean exit 0
+# (e.g. an operator-issued stop) does not trigger a restart.
+Restart=on-failure
+# Wait 5 s between restarts so a crash loop does not hammer the CPU/cameras.
+RestartSec=5
+
+# Restart-storm guard: if the agent restarts more than 5 times within 60 s,
+# systemd stops trying and marks the unit failed (surfaces a real fault
+# instead of looping forever). Tune to taste.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# --- Hardening / lifecycle --------------------------------------------------
+# Give background loops (flusher, heartbeat, poller) time to drain on stop.
+TimeoutStopSec=30
+KillSignal=SIGTERM
+# Send stdout/stderr to the journal: view with `journalctl -u cologic-edge-agent -f`.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

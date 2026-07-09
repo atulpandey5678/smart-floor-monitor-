@@ -149,6 +149,26 @@ async def get_alerts(
     return paginated_response(items, total, params.page, params.page_size)
 
 
+@router.get("/machines/{machine_id}/snapshot")
+async def get_machine_snapshot(machine_id: str):
+    """GET /api/machines/{machine_id}/snapshot — most-recent Snapshot_Thumbnail.
+
+    Serves the latest reduced-resolution JPEG pushed by the Edge_Agent for the
+    machine's live tile (Requirements 9.4, 10.1). Returns 404 when no snapshot
+    has been received yet. Staff-only (cookie-authenticated by AuthMiddleware).
+    """
+    from engine.snapshot_store import get_snapshot_store
+
+    entry = get_snapshot_store().get(machine_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="No snapshot available for this machine")
+    return Response(
+        content=entry.data,
+        media_type=entry.content_type,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @router.post("/alerts/{alert_id}/resolve")
 async def resolve_alert(alert_id: int, payload: Optional[AlertResolve] = None):
     """POST /api/alerts/{id}/resolve — mark alert as resolved."""

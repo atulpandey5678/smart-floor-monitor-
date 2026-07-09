@@ -9,6 +9,11 @@
 *.db-wal
 tracker.db
 
+# Edge_Agent Local_Camera_Config — RTSP URLs + camera credentials, on-site only.
+# Never commit real camera connection details (Requirements 7.6, 13.1).
+camera_config.json
+camera_config.*.json
+
 # Logs
 *.log
 app.log

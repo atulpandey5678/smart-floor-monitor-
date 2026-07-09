@@ -215,6 +215,11 @@ _get_state_fn = None
 # Multi-machine orchestrator reference
 _orchestrator = None
 
+# Cloud_Server Live_State_Cache reference. When set, it is the authoritative
+# source of per-machine live status (fed by ingested Heartbeats) and replaces
+# the PipelineOrchestrator as the WebSocket state source (Requirements 6.6, 10.5).
+_live_state_cache = None
+
 
 def set_state_provider(fn):
     """Set the function that returns current state for broadcasting (legacy)."""
@@ -233,11 +238,62 @@ def set_orchestrator(orchestrator):
     _orchestrator = orchestrator
 
 
-def _get_all_machines_state() -> dict:
+def set_live_state_cache(cache):
+    """Wire the Cloud_Server Live_State_Cache into the WebSocket layer.
+
+    Once set, ``_get_all_machines_state`` reads live status from this cache
+    instead of the PipelineOrchestrator, and the cache's broadcast callback is
+    pointed at ``broadcast_live_state`` so every cache mutation (valid Heartbeat
+    update or sweeper liveness transition) is pushed to subscribed Dashboard
+    clients (Requirement 6.6). Pass ``None`` to detach.
+    """
+    global _live_state_cache
+    _live_state_cache = cache
+    if cache is not None and hasattr(cache, "set_broadcast_callback"):
+        cache.set_broadcast_callback(broadcast_live_state)
+
+
+def _live_state_to_payload(entry) -> dict:
+    """Convert a Live_State_Cache ``LiveState`` into the per-machine envelope
+    payload the Dashboard expects.
+    """
+    return {
+        "machine_id": entry.machine_id,
+        "state": entry.state,
+        "worker_present": entry.worker_present,
+        "active_duration_seconds": entry.active_duration_seconds,
+        "machine_light": entry.machine_light,
+        "camera_health": entry.camera_health,
+        "liveness": entry.liveness,
+        "received_at": entry.received_at,
+    }
+
+
+async def broadcast_live_state(entry) -> None:
+    """Broadcast a single machine's live status to subscribed clients.
+
+    Wired as the Live_State_Cache broadcast callback so both valid Heartbeat
+    updates and sweeper liveness transitions reach the Dashboard (Requirement 6.6).
+    """
+    await ws_manager.broadcast_machine_state(
+        entry.machine_id, _live_state_to_payload(entry)
+    )
+
+
+async def _get_all_machines_state() -> dict:
     """Collect current state from all active machines.
 
-    Returns dict mapping machine_id to state dict.
+    Returns dict mapping machine_id to state dict. On the Cloud_Server the
+    Live_State_Cache is the authoritative source; the PipelineOrchestrator and
+    legacy providers remain as fallbacks for the monolith/edge process.
     """
+    # Cloud_Server: read live status from the Live_State_Cache (Requirement 10.5).
+    if _live_state_cache is not None:
+        entries = await _live_state_cache.snapshot_all()
+        return {
+            entry.machine_id: _live_state_to_payload(entry) for entry in entries
+        }
+
     if _orchestrator is not None:
         statuses = _orchestrator.get_all_statuses()
         machines_state = {}
@@ -293,7 +349,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     # Send initial snapshot with all active machines (Requirement 4.2)
     try:
-        machines_state = _get_all_machines_state()
+        machines_state = await _get_all_machines_state()
         await ws_manager.send_snapshot(websocket, machines_state)
     except Exception as e:
         logger.error(f"Failed to send initial snapshot: {e}")
@@ -358,7 +414,7 @@ async def _handle_client_message(websocket: WebSocket, raw: str):
         })
 
         # Send reconciliation with current state for subscribed machines (Requirement 4.5)
-        machines_state = _get_all_machines_state()
+        machines_state = await _get_all_machines_state()
         await ws_manager.send_reconciliation(websocket, machines_state)
 
         logger.debug(f"Client subscribed to machines: {machine_ids}")
@@ -378,7 +434,7 @@ async def _handle_client_message(websocket: WebSocket, raw: str):
     elif msg_type == "request_snapshot":
         # Client requests a full state reconciliation (e.g., after reconnect)
         # Requirement 4.5: Send full state reconciliation on reconnect
-        machines_state = _get_all_machines_state()
+        machines_state = await _get_all_machines_state()
         await ws_manager.send_reconciliation(websocket, machines_state)
         logger.debug("Sent state reconciliation on client request")
 
@@ -402,7 +458,7 @@ async def broadcast_loop():
     while True:
         try:
             if ws_manager.client_count > 0:
-                machines_state = _get_all_machines_state()
+                machines_state = await _get_all_machines_state()
 
                 # Broadcast each machine's state to subscribed clients
                 for machine_id, state in machines_state.items():

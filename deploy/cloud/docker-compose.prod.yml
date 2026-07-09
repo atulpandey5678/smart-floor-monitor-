@@ -1,0 +1,45 @@
+version: "3.9"
+
+# ── Cloud_Server — GCP Compute Engine production deployment ────────────────
+# Runs the Cloud_Server (FastAPI) process only. No camera. No CV pipeline.
+# SQLite (WAL mode) is the retained database — see Requirements 14.2, 14.3.
+#
+# Secrets and credentials are injected from a git-excluded .env.prod file.
+# Never hardcode any key/credential/bucket name in this file.
+#
+# Usage:
+#   cp .env.prod.example .env.prod   # fill in real values
+#   docker compose -f deploy/cloud/docker-compose.prod.yml up -d
+
+services:
+  cloud-server:
+    build:
+      context: ../..          # project root
+      dockerfile: Dockerfile
+    restart: always
+    env_file:
+      - ../../.env.prod        # git-excluded; copy from .env.prod.example
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist the SQLite WAL database across container restarts.
+      # The DB_PATH env var inside the container must point to this mount.
+      - cloud-db:/app/data
+    environment:
+      # Override DB_PATH to the persistent volume path.
+      DB_PATH: /app/data/tracker.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  cloud-db:
+    driver: local

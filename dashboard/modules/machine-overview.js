@@ -72,6 +72,27 @@ function getPipelineHealth(m) {
 }
 
 /**
+ * Map a liveness string (LIVE/STALE/UNKNOWN) to a CSS class and label.
+ */
+function livenessDisplay(liveness) {
+    const l = (liveness || 'UNKNOWN').toUpperCase();
+    if (l === 'LIVE')    return { label: 'LIVE',    cls: 'liveness-live' };
+    if (l === 'STALE')   return { label: 'STALE',   cls: 'liveness-stale' };
+    return                      { label: 'UNKNOWN', cls: 'liveness-unknown' };
+}
+
+/**
+ * Map a camera_health string to a display label and CSS class.
+ */
+function cameraHealthDisplay(health) {
+    const h = (health || '').toUpperCase();
+    if (h === 'HEALTHY')   return { label: 'Cam: Healthy',   cls: 'cam-healthy' };
+    if (h === 'DEGRADED')  return { label: 'Cam: Degraded',  cls: 'cam-degraded' };
+    if (h === 'FAILED')    return { label: 'Cam: Failed',    cls: 'cam-failed' };
+    return null;
+}
+
+/**
  * Load and render the machines page (grid of cards).
  */
 export async function loadMachinesPage() {
@@ -154,6 +175,11 @@ export function renderMachineCards(machines) {
         // Pipeline health
         const health = getPipelineHealth(m);
 
+        // Live-state fields from Live_State_Cache (Req 6.8, 10.1)
+        const liveness = livenessDisplay(m.liveness);
+        const camHealth = cameraHealthDisplay(m.camera_health);
+        const machineLight = m.machine_light || m.light_color || null;
+
         return `
         <div class="machine-card" id="mc-${mid}" data-state="${escHtml(dataState)}" data-machine-id="${mid}" role="button" tabindex="0" aria-label="View details for ${escHtml(displayName)}">
             <div class="machine-card-header">
@@ -162,6 +188,16 @@ export function renderMachineCards(machines) {
                     <span class="state-badge">${escHtml(stateLabel)}</span>
                 </div>
                 <span class="mc-machine-id">${mid}</span>
+            </div>
+            <div class="mc-snapshot-wrap">
+                <img class="mc-snapshot" id="mc-snap-${mid}"
+                     src="/api/machines/${mid}/snapshot"
+                     alt="Snapshot for ${escHtml(displayName)}"
+                     loading="lazy"
+                     style="display:none"
+                     onerror="this.style.display='none'"
+                     onload="this.style.display='block'"
+                />
             </div>
             <div class="mc-body">
                 <div class="mc-info-row">
@@ -177,6 +213,9 @@ export function renderMachineCards(machines) {
                 <div class="mc-health-row">
                     <span class="mc-status-indicator ${colorCls}"></span>
                     <span class="mc-health-badge ${health.cls}">${health.label}</span>
+                    <span class="mc-liveness-badge ${liveness.cls}">${liveness.label}</span>
+                    ${camHealth ? `<span class="mc-cam-health ${camHealth.cls}">${camHealth.label}</span>` : ''}
+                    ${machineLight ? `<span class="mc-machine-light light-${escHtml(machineLight.toLowerCase())}">${escHtml(machineLight)}</span>` : ''}
                 </div>
             </div>
         </div>`;
@@ -262,5 +301,37 @@ export function updateMachineCardFromWs(data) {
     if (healthBadge) {
         healthBadge.className = 'mc-health-badge ' + health.cls;
         healthBadge.textContent = health.label;
+    }
+
+    // Update liveness badge (LIVE/STALE/UNKNOWN) from Live_State_Cache (Req 6.7, 6.8, 10.5)
+    const livenessBadge = card.querySelector('.mc-liveness-badge');
+    if (livenessBadge && data.liveness !== undefined) {
+        const lv = livenessDisplay(data.liveness);
+        livenessBadge.className = 'mc-liveness-badge ' + lv.cls;
+        livenessBadge.textContent = lv.label;
+    }
+
+    // Update camera health label (Req 6.3)
+    const camBadge = card.querySelector('.mc-cam-health');
+    const camHealth = cameraHealthDisplay(data.camera_health);
+    if (camBadge && camHealth) {
+        camBadge.className = 'mc-cam-health ' + camHealth.cls;
+        camBadge.textContent = camHealth.label;
+    }
+
+    // Update machine light
+    const lightBadge = card.querySelector('.mc-machine-light');
+    if (lightBadge && (data.machine_light || data.light_color)) {
+        const light = data.machine_light || data.light_color;
+        lightBadge.className = 'mc-machine-light light-' + light.toLowerCase();
+        lightBadge.textContent = light;
+    }
+
+    // Refresh snapshot thumbnail (best-effort, silently hide on 404) (Req 9.4, 10.1)
+    const snap = card.querySelector('.mc-snapshot');
+    if (snap) {
+        const newSrc = '/api/machines/' + encodeURIComponent(mid) + '/snapshot?t=' + Date.now();
+        snap.style.display = 'none';
+        snap.src = newSrc;
     }
 }

@@ -35,10 +35,14 @@ repo = None
 _broadcast_task = None
 _fastapi_loop = None
 _scheduler = None
+_live_state_cache = None
 
-# Routes that do NOT require authentication
+# Routes that do NOT require authentication via the staff cookie AuthMiddleware.
+# NOTE: /api/ingest/ is exempt from *cookie* auth because it uses a dedicated
+# API-key path (api/ingest_auth.verify_ingest_key), not because it is public.
 _AUTH_EXEMPT_PREFIXES = ("/auth/", "/ws", "/api/video_feed", "/api/stream", "/api/setup/",
                          "/api/v1/video_feed", "/api/v1/stream", "/api/v1/setup/",
+                         "/api/ingest/",
                          "/health")
 _STATIC_EXTENSIONS = (".html", ".css", ".js", ".ico", ".png", ".jpg", ".svg", ".woff", ".woff2", ".ttf")
 
@@ -61,6 +65,11 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
         # Only check state-changing methods on API paths
         if method in self._STATE_CHANGING_METHODS and path.startswith("/api"):
+            # Ingest endpoints use API-key auth (no CSRF cookie possible for
+            # machine clients), so they are exempt from CSRF entirely.
+            from api.ingest_auth import INGEST_PATH_PREFIX
+            if path.startswith(INGEST_PATH_PREFIX):
+                return await call_next(request)
             # Skip exempt paths
             if not any(path.endswith(p) for p in self._CSRF_EXEMPT_PATHS):
                 from api.auth import verify_csrf_token
@@ -110,7 +119,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown events."""
-    global db, repo, _broadcast_task, _fastapi_loop
+    global db, repo, _broadcast_task, _fastapi_loop, _live_state_cache
     _fastapi_loop = asyncio.get_running_loop()
 
     # Startup
@@ -135,6 +144,33 @@ async def lifespan(app: FastAPI):
     repo = Repository(async_db)  # Repository now uses async DB
     set_routes_repo(repo)
     logger.info(f"Database initialized at {DB_PATH} (sync + async)")
+
+    # Wire the Ingest_API (Edge → Cloud). Share the async-DB-backed repository,
+    # a credential-free CloudMachineRegistry, an in-memory Live_State_Cache, and
+    # the configured Object_Store. The staleness sweeper flips entries to STALE
+    # once they age past the interval.
+    from engine.machine_registry import CloudMachineRegistry
+    from engine.live_state_cache import get_live_state_cache
+    from engine.snapshot_store import get_snapshot_store as _get_snapshot_store
+    from api.ingest import (
+        set_ingest_repo,
+        set_ingest_live_cache,
+        set_ingest_registry,
+        set_ingest_snapshot_store,
+    )
+
+    global _live_state_cache
+    # Use the single shared module singleton so the Ingest_API and the WebSocket
+    # layer read/write the SAME cache instance (Req 6.6). Store it in the
+    # module-level global so shutdown stops the correct sweeper.
+    _live_state_cache = get_live_state_cache()
+    cloud_registry = CloudMachineRegistry(async_db)
+    set_ingest_repo(repo)
+    set_ingest_registry(cloud_registry)
+    set_ingest_live_cache(_live_state_cache)
+    set_ingest_snapshot_store(_get_snapshot_store())  # share the singleton (Req 9.4)
+    _live_state_cache.start_sweeper()
+    logger.info("Ingest_API wired (repo + registry + live-state cache)")
 
     # Provide async DB to health check endpoints
     # Also wire in orchestrator if available (set in engine/__init__.py by main.py)
@@ -165,9 +201,17 @@ async def lifespan(app: FastAPI):
     logger.info("Settings manager initialized")
 
     # Start WebSocket broadcast background task
-    from api.websocket import broadcast_loop, ws_manager
+    from api.websocket import broadcast_loop, ws_manager, set_live_state_cache
     _broadcast_task = asyncio.create_task(broadcast_loop())
     logger.info("WebSocket broadcast loop started")
+
+    # Wire the SAME shared Live_State_Cache singleton into the WebSocket layer so
+    # live tiles read from ingested Heartbeats and cache updates/liveness
+    # transitions broadcast to clients (Req 6.6, 10.5). The singleton and its
+    # sweeper are already set up in the Ingest_API wiring above, so we only wire
+    # it into the WebSocket layer here — no second instance, no second sweeper.
+    set_live_state_cache(_live_state_cache)
+    logger.info("Live_State_Cache wired to WebSocket (shared singleton)")
 
     # Register components with graceful shutdown handler (Req 22.1, 22.2, 22.3)
     shutdown_handler = get_shutdown_handler()
@@ -199,6 +243,14 @@ async def lifespan(app: FastAPI):
             await _broadcast_task
         except asyncio.CancelledError:
             pass
+
+    # Stop the shared Live_State_Cache staleness sweeper exactly once. The
+    # module global points at the singleton wired during startup.
+    if _live_state_cache is not None:
+        try:
+            await _live_state_cache.stop_sweeper()
+        except Exception as e:
+            logger.warning("Failed to stop Live_State_Cache sweeper: %s", e)
 
     if _scheduler:
         _scheduler.shutdown()
@@ -262,6 +314,12 @@ app.add_middleware(AuthMiddleware)
 # CSRF middleware for state-changing API requests
 app.add_middleware(CSRFMiddleware)
 
+# Ingest oversize-body guard (outermost): reject /api/ingest/* bodies over the
+# configured max with HTTP 413 before parsing or persistence (Requirement 2.9).
+from api.ingest_body_guard import IngestBodySizeGuardMiddleware  # noqa: E402
+
+app.add_middleware(IngestBodySizeGuardMiddleware)
+
 # Import and include routes
 from api.routes import router, set_repo as set_routes_repo  # noqa: E402
 from api.auth import auth_router  # noqa: E402
@@ -279,6 +337,14 @@ app.include_router(machines_router, prefix="/api/v1")
 app.include_router(machines_router, prefix="/api")
 
 app.include_router(auth_router)
+
+# Mount the Ingest_API (Edge → Cloud). The router carries its own /api/ingest
+# prefix and API-key dependency; it is exempt from cookie auth + CSRF (see
+# _AUTH_EXEMPT_PREFIXES and CSRFMiddleware) and guarded by the oversize-body
+# middleware already installed above.
+from api.ingest import router as ingest_router  # noqa: E402
+
+app.include_router(ingest_router)
 
 # Mount health check at root level (unauthenticated, no /api prefix)
 # Requirement 14.1, 14.2, 14.3, 14.4

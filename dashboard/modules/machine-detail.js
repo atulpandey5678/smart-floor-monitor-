@@ -671,6 +671,11 @@ function renderDetailStatusCard(data) {
     const effEl = document.getElementById('md-efficiency');
     const pipelineEl = document.getElementById('md-pipeline-status');
     const lightEl = document.getElementById('md-light-status');
+    // Live-state fields from Live_State_Cache (Req 10.1, 6.7, 6.8)
+    const livenessEl = document.getElementById('md-liveness');
+    const camHealthEl = document.getElementById('md-camera-health');
+    const receivedAtEl = document.getElementById('md-received-at');
+    const snapImg = document.getElementById('md-snapshot-img');
 
     if (machineIdEl) machineIdEl.textContent = data.machine_id || '—';
     if (badgeEl) {
@@ -683,9 +688,39 @@ function renderDetailStatusCard(data) {
     if (effEl) effEl.textContent = data.efficiency_percent !== undefined ? data.efficiency_percent.toFixed(0) + '%' : '—';
     if (pipelineEl) pipelineEl.textContent = data.pipeline_status || data.pipeline_state || 'running';
     if (lightEl) {
-        const light = data.machine_light_status || data.light_color || '—';
+        const light = data.machine_light || data.machine_light_status || data.light_color || '—';
         lightEl.textContent = light;
         lightEl.className = 'md-stat-value' + (light !== '—' ? ' light-' + light.toLowerCase() : '');
+    }
+
+    // Liveness from Live_State_Cache (LIVE / STALE / UNKNOWN)
+    if (livenessEl && data.liveness !== undefined) {
+        const lv = (data.liveness || 'UNKNOWN').toUpperCase();
+        livenessEl.textContent = lv;
+        livenessEl.className = 'md-stat-value liveness-' + lv.toLowerCase();
+    }
+
+    // Camera health
+    if (camHealthEl && data.camera_health !== undefined) {
+        camHealthEl.textContent = data.camera_health || '—';
+    }
+
+    // Received-at timestamp
+    if (receivedAtEl && data.received_at !== undefined) {
+        try {
+            receivedAtEl.textContent = new Date(data.received_at * 1000).toLocaleTimeString();
+        } catch (_) {
+            receivedAtEl.textContent = String(data.received_at);
+        }
+    }
+
+    // Refresh snapshot thumbnail (Req 9.4, 10.1)
+    if (snapImg && data.machine_id) {
+        const newSrc = '/api/machines/' + encodeURIComponent(data.machine_id) + '/snapshot?t=' + Date.now();
+        snapImg.style.display = 'none';
+        snapImg.onerror = () => { snapImg.style.display = 'none'; };
+        snapImg.onload  = () => { snapImg.style.display = 'block'; };
+        snapImg.src = newSrc;
     }
 }
 
@@ -774,6 +809,17 @@ async function loadDetailAlerts(machineId) {
                 </div>
                 <div class="md-alert-msg">${escHtml(a.message || '')}</div>
                 <div class="md-alert-time">${relTime(a.created_at)}</div>
+                ${a.event_image_url ? `
+                <div class="md-alert-image">
+                    <a href="${escHtml(a.event_image_url)}" target="_blank" rel="noopener noreferrer">
+                        <img src="${escHtml(a.event_image_url)}"
+                             alt="Event image for alert ${a.id || ''}"
+                             class="md-alert-thumb"
+                             loading="lazy"
+                             onerror="this.closest('.md-alert-image').style.display='none'"
+                        />
+                    </a>
+                </div>` : ''}
                 ${a.resolved ? '<span class="badge-resolved">Resolved</span>' : ''}
             </div>
         `).join('');
@@ -816,7 +862,7 @@ async function loadDetailSessionHistory(machineId) {
     const empty = document.getElementById('md-sessions-empty');
     if (!tbody) return;
 
-    tbody.innerHTML = Array(3).fill('<tr><td colspan="5"><div class="skeleton" style="height:28px"></div></td></tr>').join('');
+    tbody.innerHTML = Array(3).fill('<tr><td colspan="7"><div class="skeleton" style="height:28px"></div></td></tr>').join('');
 
     const startInput = document.getElementById('md-history-start');
     const endInput = document.getElementById('md-history-end');
@@ -847,12 +893,15 @@ async function loadDetailSessionHistory(machineId) {
             const end = s.end_time ? fmtTime(s.end_time) : '<em>Active</em>';
             const dur = s.duration_seconds ? formatDuration(s.duration_seconds) : '—';
             const status = s.end_time ? 'Completed' : 'Active';
+            const closeReason = s.close_reason ? escHtml(s.close_reason) : '—';
             return `<tr>
+                <td>${escHtml(s.machine_id || currentDetailMachineId || '—')}</td>
                 <td>${escHtml(s.employee_name || s.badge_id || '—')}</td>
                 <td>${start}</td>
                 <td>${end}</td>
                 <td>${dur}</td>
                 <td><span class="sess-status ${s.end_time ? 'completed' : 'active'}">${status}</span></td>
+                <td>${closeReason}</td>
             </tr>`;
         }).join('');
 

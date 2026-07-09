@@ -8,7 +8,8 @@ operations (aiosqlite wraps a single connection in a background thread).
 import asyncio
 import structlog
 import os
-from typing import Any, List, Optional, Tuple
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, List, Optional, Tuple
 
 import aiosqlite
 
@@ -66,6 +67,38 @@ class AsyncDatabase:
             cursor = await conn.execute(sql, params)
             await conn.commit()
             return cursor
+
+    @asynccontextmanager
+    async def transaction(self) -> AsyncIterator[aiosqlite.Connection]:
+        """Run multiple statements atomically within a single transaction.
+
+        Yields the underlying aiosqlite connection so callers can issue several
+        ``await conn.execute(...)`` statements that either all commit together or
+        all roll back on any exception. Acquires the same semaphore as the other
+        methods so it cooperates with the single shared connection model.
+
+        Usage::
+
+            async with db.transaction() as conn:
+                cur = await conn.execute("INSERT ...", params)
+                if cur.rowcount:
+                    await conn.execute("UPDATE ...", params)
+
+        Note: do NOT call the wrapper's ``execute``/``fetch_*`` methods inside the
+        block — they acquire the semaphore again (deadlock) and commit early.
+        Use the yielded connection's ``execute`` directly.
+        """
+        async with self._semaphore:
+            conn = await self.connect()
+            try:
+                yield conn
+                await conn.commit()
+            except Exception:
+                try:
+                    await conn.rollback()
+                except Exception:
+                    logger.exception("Transaction rollback failed")
+                raise
 
     async def executemany(self, sql: str, params_list: List[Tuple]) -> aiosqlite.Cursor:
         """Execute a SQL statement against multiple parameter sets and commit."""

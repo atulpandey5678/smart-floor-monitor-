@@ -15,9 +15,25 @@ from urllib.parse import urlparse, urlunparse
 import structlog
 from cryptography.fernet import Fernet
 
+from api.ingest_schemas import MachineMetadata
 from db.async_database import AsyncDatabase
 
 logger = structlog.get_logger(__name__)
+
+# ── Credential-free metadata columns (Cloud_Server) ────────────
+# The cloud MachineRegistry read path selects ONLY these columns. The
+# ``rtsp_url_encrypted`` column is deliberately excluded so RTSP URLs and camera
+# credentials are never read into, returned by, or logged from the cloud
+# (Requirements 13.2, 13.3). Column order matches ``MachineMetadata`` fields.
+_METADATA_COLUMNS = (
+    "machine_id",
+    "display_name",
+    "detection_zone",
+    "person_confidence_threshold",
+    "light_zone",
+    "updated_at",
+)
+_METADATA_SELECT = ", ".join(_METADATA_COLUMNS)
 
 # ── Encryption Key ─────────────────────────────────────────────
 # Must be set via FERNET_KEY environment variable (base64-encoded 32-byte key).
@@ -291,6 +307,90 @@ class MachineRegistry:
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         }
+
+
+class CloudMachineRegistry:
+    """Credential-free machine metadata read path for the Cloud_Server.
+
+    The Cloud_Server is the authoritative source for Machine_Metadata
+    (Requirement 7.1) but must never store, read, return, or log RTSP URLs or
+    camera credentials (Requirements 13.2, 13.3). This variant queries ONLY the
+    non-secret metadata columns (``_METADATA_COLUMNS``) — the
+    ``rtsp_url_encrypted`` column is never referenced — and exposes:
+
+    - ``get_metadata`` / ``list_metadata`` — the credential-free read path used
+      by the ``GET /api/ingest/machines`` metadata pull, returning
+      ``MachineMetadata`` (which itself carries no credential fields).
+    - ``is_registered`` — a lightweight machine-registration lookup used by the
+      Ingest_API to validate that an incoming payload's machine ID is known
+      before persisting (Requirement 2.8).
+
+    Read-only: registration/update/credential operations remain on the edge and
+    the authoritative ``MachineRegistry``; this class never decrypts anything.
+    """
+
+    def __init__(self, db: AsyncDatabase):
+        self._db = db
+
+    async def get_metadata(self, machine_id: str) -> Optional[MachineMetadata]:
+        """Return credential-free ``MachineMetadata`` for one machine, or None.
+
+        Selects only metadata columns; never reads ``rtsp_url_encrypted``.
+        """
+        row = await self._db.fetch_one(
+            f"SELECT {_METADATA_SELECT} FROM machines WHERE machine_id = ?",
+            (machine_id,),
+        )
+        if row is None:
+            return None
+        return self._row_to_metadata(row)
+
+    async def list_metadata(
+        self, status: Optional[str] = "active"
+    ) -> List[MachineMetadata]:
+        """Return credential-free ``MachineMetadata`` for all machines.
+
+        Defaults to only ``active`` machines (pass ``status=None`` for all).
+        Selects only metadata columns; never reads ``rtsp_url_encrypted``.
+        """
+        if status:
+            rows = await self._db.fetch_all(
+                f"SELECT {_METADATA_SELECT} FROM machines "
+                "WHERE status = ? ORDER BY created_at",
+                (status,),
+            )
+        else:
+            rows = await self._db.fetch_all(
+                f"SELECT {_METADATA_SELECT} FROM machines ORDER BY created_at"
+            )
+        return [self._row_to_metadata(r) for r in rows]
+
+    async def is_registered(self, machine_id: str) -> bool:
+        """Return True if the machine ID exists in the Machine_Registry.
+
+        Machine-registration lookup used by the Ingest_API to validate machine
+        IDs before persisting (Requirement 2.8). Reads only ``machine_id``.
+        """
+        row = await self._db.fetch_one(
+            "SELECT 1 FROM machines WHERE machine_id = ?", (machine_id,)
+        )
+        return row is not None
+
+    @staticmethod
+    def _row_to_metadata(row) -> MachineMetadata:
+        """Map a metadata-only DB row to a ``MachineMetadata`` model.
+
+        No credential column is present in ``row`` by construction, so the
+        resulting model is guaranteed credential-free.
+        """
+        return MachineMetadata(
+            machine_id=row["machine_id"],
+            display_name=row["display_name"],
+            detection_zone=row["detection_zone"],
+            person_confidence_threshold=row["person_confidence_threshold"],
+            light_zone=row["light_zone"],
+            updated_at=row["updated_at"],
+        )
 
 
 class DuplicateMachineError(Exception):
