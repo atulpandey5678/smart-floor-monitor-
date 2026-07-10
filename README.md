@@ -1,37 +1,129 @@
-# Shop Floor Tracker
+# Cologic Shop Floor Tracker
 
-A local Python application that monitors worker presence at a machine station using a single IP camera. It detects workers via YOLOv8-nano, reads printed numeric badge IDs via PaddleOCR, tracks session durations with anti-cheat enforcement (co-presence and micro-movement rules), and presents real-time data on a browser-based dashboard. Runs entirely on CPU — no GPU required.
+A production-ready, edge-cloud split system for monitoring worker presence at machine stations using IP cameras. The system uses YOLOv8-nano for person detection, PaddleOCR for badge reading, and enforces anti-cheat rules (co-presence and micro-movement validation). Features resilient edge agents with offline queueing and a centralized cloud server for dashboard access and data aggregation.
+
+## 🏗️ Architecture
+
+- **Edge Agents**: Run on-site at each factory, process camera feeds, queue events locally
+- **Cloud Server**: Centralized dashboard and API hosted on GCP
+- **Offline-First**: Edge agents continue operating during network/cloud outages
+- **HTTPS**: Secure TLS communication between edge and cloud
+
+## 📚 Documentation
+
+### Deployment Guides
+- **[Complete GCP Deployment Guide](./docs/GCP_DEPLOYMENT_GUIDE.md)** — Comprehensive step-by-step guide (30-45 min)
+- **[GCP Quick Start](./docs/GCP_QUICK_START.md)** — Fast deployment for experienced users (15-20 min)
+- **[Deployment Checklist](./docs/DEPLOYMENT_CHECKLIST.md)** — Print-friendly checklist with sign-offs
+- **[Documentation Index](./docs/README.md)** — Complete documentation overview
+
+### Quick Links
+- [Edge Agent Installation (Windows)](./deploy/edge/README.md)
+- [Edge Agent Installation (Linux)](./deploy/edge/README.md)
+- [Cloud Server Deployment](./deploy/cloud/README.md)
+- [Automated Deployment Script](./scripts/deploy-gcp.sh)
+
+## 💰 Cost Estimate
+
+**Monthly GCP Costs** (for cloud server):
+- VM (e2-medium): ~$24/month
+- Static IP: ~$7/month
+- Cloud Storage (~10 GB): ~$0.20/month
+- Bandwidth (~50 GB/month): ~$6/month
+- **Total**: ~$35-50/month
+
+**Edge Agents**: No cloud costs — run on existing factory hardware
 
 ## System Requirements
 
-| Component | Requirement |
-|-----------|-------------|
-| OS | Windows 10 or Windows 11 |
-| Python | 3.10+ |
-| CPU | Intel i5 or equivalent (no GPU needed) |
-| RAM | 8 GB minimum recommended |
-| Camera | IP camera with RTSP stream support |
-| Network | Camera on same LAN as host machine |
+### Cloud Server (GCP)
+- **VM**: e2-medium or higher (2 vCPUs, 4 GB RAM)
+- **OS**: Ubuntu 22.04 LTS
+- **Disk**: 50 GB minimum
+- **Database**: SQLite (WAL mode)
+- **Storage**: Google Cloud Storage for images
 
-## Quick Start
+### Edge Agent (Factory Site)
+- **OS**: Windows 10/11 or Linux (Ubuntu 20.04+)
+- **Python**: 3.10+
+- **CPU**: 4+ cores (Intel i5 or equivalent)
+- **RAM**: 8 GB minimum recommended
+- **GPU**: Optional (NVIDIA for accelerated CV)
+- **Camera**: IP camera with RTSP stream support
+- **Network**: HTTPS connectivity to cloud server
 
+## 🚀 Quick Start
+
+### For Cloud Server Deployment
+See the **[GCP Quick Start Guide](./docs/GCP_QUICK_START.md)** or use the automated script:
+
+```bash
+cd scripts
+./deploy-gcp.sh
+```
+
+### For Edge Agent Installation (Windows)
+```powershell
+# Clone repository
+git clone https://github.com/atulpandey5678/smart-floor-monitor-.git
+cd smart-floor-monitor-
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your cloud server URL and API key
+
+# Configure cameras
+# Edit camera_config.json with your RTSP URLs
+
+# Install as Windows service (run as Administrator)
+cd deploy\edge
+.\install-windows-service.ps1
+```
+
+### For Edge Agent Installation (Linux)
+```bash
+# Clone repository
+git clone https://github.com/atulpandey5678/smart-floor-monitor-.git
+cd smart-floor-monitor-
+
+# Install dependencies
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your cloud server URL and API key
+
+# Configure cameras
+# Edit camera_config.json with your RTSP URLs
+
+# Install as systemd service
+sudo cp deploy/edge/cologic-edge-agent.service /etc/systemd/system/
+sudo systemctl enable cologic-edge-agent
+sudo systemctl start cologic-edge-agent
+```
+
+### For Local Development/Testing
 ```bash
 # 1. Create virtual environment
 python -m venv venv
-venv\Scripts\activate
+source venv/bin/activate  # Linux/Mac
+# or
+venv\Scripts\activate  # Windows
 
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Copy .env.example to .env and set your camera's RTSP URL
+# 3. Configure environment
 cp .env.example .env
-#    Edit .env: RTSP_URL=rtsp://admin:password@192.168.1.108:554/stream1
+# Edit .env with your camera RTSP URL
 
 # 4. Run the application
 python main.py
 
-# 5. Open dashboard in browser
-#    http://127.0.0.1:8000
+# 5. Open dashboard
+# http://127.0.0.1:8000
 ```
 
 ## Configuration Guide
