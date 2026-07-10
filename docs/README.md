@@ -8,6 +8,23 @@ Welcome to the Cologic Shop Floor Tracker documentation! This directory contains
 
 ### Deployment Guides
 
+#### 🖱️ [GCP UI Guide](./GCP_UI_GUIDE.md) (Visual/No Command Line)
+**NEW!** Complete visual walkthrough with screen-by-screen instructions.
+
+**Best for**: Visual learners, first-time GCP users, no terminal experience needed
+
+**Covers**:
+- ASCII art mockups of every GCP Console screen
+- Exact button locations and click sequences
+- Form field examples with sample values
+- Pure UI approach - no command line needed
+- 11 major sections with visual annotations
+
+**Time to complete**: 30-45 minutes  
+**Format**: Visual with ASCII diagrams
+
+---
+
 #### 🚀 [GCP Deployment Guide](./GCP_DEPLOYMENT_GUIDE.md) (Comprehensive)
 Complete step-by-step guide for deploying on Google Cloud Platform.
 
@@ -44,18 +61,27 @@ Condensed version for quick deployments.
 
 ## 🎯 Which Guide Should I Use?
 
+### Use the **Visual UI Guide** if:
+- ✅ You prefer clicking buttons over typing commands
+- ✅ This is your first time using GCP
+- ✅ You want to see exactly what each screen looks like
+- ✅ You're not comfortable with command line
+- ✅ You want step-by-step screenshots (ASCII art)
+
 ### Use the **Comprehensive Guide** if:
 - ✅ This is your first deployment
 - ✅ You need detailed explanations
 - ✅ You want security best practices
 - ✅ You need troubleshooting help
 - ✅ This is a production deployment
+- ✅ You're comfortable with gcloud CLI commands
 
 ### Use the **Quick Start** if:
 - ✅ You're familiar with GCP
 - ✅ You've deployed before
 - ✅ You need a quick reference
 - ✅ This is a development/test deployment
+- ✅ You prefer command-line automation
 
 ---
 
